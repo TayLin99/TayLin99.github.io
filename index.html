@@ -216,7 +216,7 @@ canvas#exportCanvas{display:none;}
   <!-- Canvas -->
   <div class="canvas-section">
     <div class="canvas-container" id="canvasContainer">
-      <div class="canvas-drag-hint" id="dragHint">↕ 拖动调整位置 · 滚轮缩放</div>
+      <div class="canvas-drag-hint" id="dragHint">↕ 拖动 · 双指缩放 · 滚轮缩放</div>
       <div class="canvas-watermark"></div>
     </div>
     <div class="export-status" id="exportStatus"></div>
@@ -434,33 +434,61 @@ parts.forEach((part) => {
   });
 });
 
-// ===== Drag interaction on canvas =====
+// ===== Drag & Pinch interaction on canvas =====
 let dragPart = null, dragStartX = 0, dragStartY = 0, dragOrigDx = 0, dragOrigDy = 0;
+let pinchPart = null, pinchStartDist = 0, pinchOrigScale = 1;
+
+function getDist(t1, t2) {
+  var dx = t1.clientX - t2.clientX;
+  var dy = t1.clientY - t2.clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
 
 canvasContainer.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
 canvasContainer.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }
+  if (e.touches.length === 1) {
+    e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.touches.length === 2) {
+    e.preventDefault();
+    if (!expandedPart) return;
+    if (state[expandedPart] < 0) return;
+    pinchPart = expandedPart;
+    pinchStartDist = getDist(e.touches[0], e.touches[1]);
+    pinchOrigScale = transforms[pinchPart].scale;
+    dragPart = null;
+  }
 }, {passive:false});
 
 function startDrag(cx, cy) {
   if (!expandedPart) return;
-  const selIdx = state[expandedPart];
-  if (selIdx < 0) return;
+  if (state[expandedPart] < 0) return;
   dragPart = expandedPart;
   dragStartX = cx; dragStartY = cy;
-  const tf = transforms[dragPart];
-  dragOrigDx = tf.dx; dragOrigDy = tf.dy;
+  dragOrigDx = transforms[dragPart].dx;
+  dragOrigDy = transforms[dragPart].dy;
+  pinchPart = null;
   document.getElementById('dragHint').classList.add('visible');
 }
 
 window.addEventListener('mousemove', e => doDrag(e.clientX, e.clientY));
 window.addEventListener('touchmove', e => {
-  if (e.touches.length === 1 && dragPart) { e.preventDefault(); doDrag(e.touches[0].clientX, e.touches[0].clientY); }
+  if (e.touches.length === 2 && pinchPart) {
+    e.preventDefault();
+    var newDist = getDist(e.touches[0], e.touches[1]);
+    var ratio = newDist / pinchStartDist;
+    var s = clamp(pinchOrigScale * ratio, 0.3, 2.5);
+    transforms[pinchPart].scale = s;
+    applyTransformCSS(pinchPart);
+    updateTransformSliders(pinchPart);
+  } else if (e.touches.length === 1 && dragPart) {
+    e.preventDefault();
+    doDrag(e.touches[0].clientX, e.touches[0].clientY);
+  }
 }, {passive:false});
 
 function doDrag(cx, cy) {
   if (!dragPart) return;
-  const tf = transforms[dragPart];
+  var tf = transforms[dragPart];
   tf.dx = dragOrigDx + (cx - dragStartX);
   tf.dy = dragOrigDy + (cy - dragStartY);
   applyTransformCSS(dragPart);
@@ -471,6 +499,7 @@ window.addEventListener('touchend', endDrag);
 function endDrag() {
   if (dragPart) document.getElementById('dragHint').classList.remove('visible');
   dragPart = null;
+  pinchPart = null;
 }
 
 // Zoom with scroll wheel on canvas
