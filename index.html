@@ -26,7 +26,7 @@ body{
 .header .title{font-size:15px;font-weight:500;white-space:nowrap;}
 .header .author{font-size:12px;color:var(--text2);}
 .header .spacer{flex:1;}
-.header .btn-group{display:flex;gap:8px;}
+.header .btn-group{display:flex;gap:8px;flex-shrink:0;margin-left:auto;}
 
 /* ===== Buttons ===== */
 .btn{
@@ -126,8 +126,28 @@ canvas#exportCanvas{display:none;}
 }
 .part-body .items-row{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));
-  gap:7px;
+  gap:7px;margin-bottom:8px;
 }
+/* Transform controls inside part body */
+.transform-ctls{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;
+}
+.transform-ctls label{font-size:10px;color:var(--text2);white-space:nowrap;}
+.transform-ctls input[type=range]{width:60px;accent-color:var(--accent);}
+.transform-ctls .tf-val{font-size:10px;color:var(--text2);min-width:32px;text-align:center;}
+.transform-ctls .btn-tiny{
+  font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);
+  background:transparent;color:var(--text2);cursor:pointer;
+}
+.transform-ctls .btn-tiny:hover{color:var(--accent);border-color:var(--accent);}
+/* Drag hint on canvas */
+.canvas-drag-hint{
+  position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  font-size:10px;color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.6);
+  padding:3px 10px;border-radius:10px;pointer-events:none;opacity:0;transition:opacity 0.3s;
+}
+.canvas-drag-hint.visible{opacity:1;}
 .item-thumb{
   aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
   border:2px solid transparent;background:var(--card);transition:all 0.15s;
@@ -175,7 +195,9 @@ canvas#exportCanvas{display:none;}
 <div class="main">
   <!-- Canvas -->
   <div class="canvas-section">
-    <div class="canvas-container" id="canvasContainer"></div>
+    <div class="canvas-container" id="canvasContainer">
+      <div class="canvas-drag-hint" id="dragHint">↕ 拖动调整位置 · 滚轮缩放</div>
+    </div>
     <div class="export-status" id="exportStatus"></div>
     <canvas id="exportCanvas" width="2048" height="2048"></canvas>
   </div>
@@ -368,6 +390,11 @@ parts.forEach((part, pi) => {
 
 let expandedPart = null; // currently expanded part name (accordion)
 
+// ===== Transform state per part =====
+const transforms = {}; // partName -> {dx, dy, scale, rotation}
+parts.forEach(p => { transforms[p.name] = {dx:0, dy:0, scale:1, rotation:0}; });
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
 // ===== Build canvas layers (sorted by z-index = layer order) =====
 const canvasContainer = document.getElementById('canvasContainer');
 
@@ -385,6 +412,68 @@ parts.forEach((part) => {
     layerEls[part.name][ii] = img;
   });
 });
+
+// ===== Drag interaction on canvas =====
+let dragPart = null, dragStartX = 0, dragStartY = 0, dragOrigDx = 0, dragOrigDy = 0;
+
+canvasContainer.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+canvasContainer.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }
+}, {passive:false});
+
+function startDrag(cx, cy) {
+  if (!expandedPart) return;
+  const selIdx = state[expandedPart];
+  if (selIdx < 0) return;
+  dragPart = expandedPart;
+  dragStartX = cx; dragStartY = cy;
+  const tf = transforms[dragPart];
+  dragOrigDx = tf.dx; dragOrigDy = tf.dy;
+  document.getElementById('dragHint').classList.add('visible');
+}
+
+window.addEventListener('mousemove', e => doDrag(e.clientX, e.clientY));
+window.addEventListener('touchmove', e => {
+  if (e.touches.length === 1 && dragPart) { e.preventDefault(); doDrag(e.touches[0].clientX, e.touches[0].clientY); }
+}, {passive:false});
+
+function doDrag(cx, cy) {
+  if (!dragPart) return;
+  const tf = transforms[dragPart];
+  tf.dx = dragOrigDx + (cx - dragStartX);
+  tf.dy = dragOrigDy + (cy - dragStartY);
+  applyTransformCSS(dragPart);
+}
+
+window.addEventListener('mouseup', endDrag);
+window.addEventListener('touchend', endDrag);
+function endDrag() {
+  if (dragPart) document.getElementById('dragHint').classList.remove('visible');
+  dragPart = null;
+}
+
+// Zoom with scroll wheel on canvas
+canvasContainer.addEventListener('wheel', e => {
+  if (!expandedPart) return;
+  const selIdx = state[expandedPart];
+  if (selIdx < 0) return;
+  e.preventDefault();
+  const tf = transforms[expandedPart];
+  const delta = e.deltaY > 0 ? -0.05 : 0.05;
+  tf.scale = clamp(tf.scale + delta, 0.3, 2.5);
+  applyTransformCSS(expandedPart);
+  updateTransformSliders(expandedPart);
+}, {passive:false});
+
+// Apply CSS transform to currently visible layer of a part
+function applyTransformCSS(partName) {
+  const selIdx = state[partName];
+  if (selIdx < 0) return;
+  const el = layerEls[partName][selIdx];
+  if (!el) return;
+  const tf = transforms[partName];
+  el.style.transform = 'translate(' + tf.dx + 'px,' + tf.dy + 'px) scale(' + tf.scale + ') rotate(' + tf.rotation + 'deg)';
+}
 
 // ===== Build parts panel =====
 const partsPanel = document.getElementById('partsPanel');
@@ -430,6 +519,16 @@ parts.forEach((part) => {
   });
 
   body.appendChild(itemsRow);
+
+  // Transform controls
+  const tfCtl = document.createElement('div');
+  tfCtl.className = 'transform-ctls';
+  tfCtl.innerHTML = '<button class="btn-tiny" onclick="resetTransform(\'' + part.name + '\')">↺</button>' +
+    '<label>缩放</label><input type="range" min="30" max="250" value="100" oninput="setTransform(\'' + part.name + '\',\'scale\',this.value/100)"><span class="tf-val tf-scale">1.0</span>' +
+    '<label>旋转</label><input type="range" min="-180" max="180" value="0" oninput="setTransform(\'' + part.name + '\',\'rotation\',parseInt(this.value))"><span class="tf-val tf-rot">0°</span>';
+  tfCtl.dataset.partName = part.name;
+  body.appendChild(tfCtl);
+
   group.appendChild(body);
   partsPanel.appendChild(group);
 });
@@ -458,11 +557,20 @@ function selectItem(partName, ii) {
   // Update canvas
   const els = layerEls[partName];
   if (els) {
-    els.forEach((img, idx) => img.classList.toggle('hidden', idx !== ii));
+    els.forEach((img, idx) => {
+      img.classList.toggle('hidden', idx !== ii);
+      // Clear old transforms on hidden layers
+      if (idx !== ii) img.style.transform = '';
+    });
+    // Apply transform to newly selected layer
+    if (ii >= 0 && els[ii]) {
+      applyTransformCSS(partName);
+    }
   }
 
   // Update panel UI
   refreshPartUI(partName);
+  updateTransformSliders(partName);
 }
 
 // ===== Refresh part UI =====
@@ -492,9 +600,18 @@ function resetAll() {
   parts.forEach(part => {
     const newVal = DEFAULT_NONE.includes(part.name) ? -1 : (part.items.length > 0 ? 0 : -1);
     state[part.name] = newVal;
+    // Reset transform
+    transforms[part.name] = {dx:0, dy:0, scale:1, rotation:0};
     const els = layerEls[part.name];
-    if (els) els.forEach((img, idx) => img.classList.toggle('hidden', idx !== newVal));
+    if (els) {
+      els.forEach((img, idx) => {
+        img.classList.toggle('hidden', idx !== newVal);
+        img.style.transform = '';
+      });
+      if (newVal >= 0 && els[newVal]) applyTransformCSS(part.name);
+    }
     refreshPartUI(part.name);
+    updateTransformSliders(part.name);
   });
   showToast('↺ 已重置');
 }
@@ -536,20 +653,29 @@ async function exportJPG() {
   ctx.clearRect(0, 0, 2048, 2048);
 
   try {
-    // Collect layers (bottom to top = LAYER_ORDER)
+    // Collect layers with their transforms (bottom to top = LAYER_ORDER)
     const layers = [];
     for (const name of LAYER_ORDER) {
       const selIdx = state[name];
       if (selIdx < 0) continue;
       const part = parts.find(p => p.name === name);
       if (!part) continue;
-      layers.push(part.items[selIdx].path);
+      layers.push({path: part.items[selIdx].path, name: name});
     }
 
-    // fetch each image as blob, load via blob: URL (does NOT taint canvas)
-    for (const src of layers) {
-      const img = await loadCleanImage(src);
+    // Draw each layer with its transform applied
+    const R = 2048 / 600; // scale factor from display px to canvas px
+    for (const layer of layers) {
+      const img = await loadCleanImage(layer.path);
+      const tf = transforms[layer.name];
+      ctx.save();
+      // Translate to center, apply scale/rotation, translate back + offset
+      ctx.translate(2048/2, 2048/2);
+      ctx.rotate(tf.rotation * Math.PI / 180);
+      ctx.scale(tf.scale, tf.scale);
+      ctx.translate(-2048/2 + tf.dx * R, -2048/2 + tf.dy * R);
       ctx.drawImage(img, 0, 0, 2048, 2048);
+      ctx.restore();
     }
 
     // Canvas is clean → export
@@ -621,6 +747,33 @@ function showToast(msg) {
 function closePreview(e) {
   if (e && e.target !== e.currentTarget) return; // only close on overlay click, not img
   document.getElementById('previewOverlay').classList.remove('show');
+}
+
+// ===== Transform helpers =====
+function setTransform(partName, key, value) {
+  transforms[partName][key] = value;
+  applyTransformCSS(partName);
+  updateTransformSliders(partName);
+}
+
+function resetTransform(partName) {
+  transforms[partName] = {dx:0, dy:0, scale:1, rotation:0};
+  applyTransformCSS(partName);
+  updateTransformSliders(partName);
+}
+
+function updateTransformSliders(partName) {
+  const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+  if (!group) return;
+  const tf = transforms[partName];
+  const scaleSlider = group.querySelector('input[type=range]:nth-of-type(1)');
+  const rotSlider = group.querySelector('input[type=range]:nth-of-type(2)');
+  const scaleVal = group.querySelector('.tf-scale');
+  const rotVal = group.querySelector('.tf-rot');
+  if (scaleSlider) scaleSlider.value = Math.round(tf.scale * 100);
+  if (rotSlider) rotSlider.value = Math.round(tf.rotation);
+  if (scaleVal) scaleVal.textContent = tf.scale.toFixed(2);
+  if (rotVal) rotVal.textContent = Math.round(tf.rotation) + '\u00B0';
 }
 
 // ===== Init: expand the first part (背景) =====
