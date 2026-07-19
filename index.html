@@ -6,7 +6,7 @@
 <title>奇迹小树 - 捏人创作</title>
 <style>
 /* ===== Reset & Base ===== */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;user-select:none;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#1a1a2e;--surface:#16213e;--card:#0f3460;--accent:#e94560;
   --text:#eaeaea;--text2:#a0a0b8;--radius:12px;--transition:0.2s ease;
@@ -75,10 +75,10 @@ body{
   object-fit:contain;pointer-events:none;transition:opacity 0.15s;
 }
 .canvas-container .layer-img.hidden{opacity:0;}
-/* Watermark overlay */
+/* Watermark overlay - covers entire page */
 .watermark-overlay{
-  position:absolute;inset:0;pointer-events:none;z-index:999;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='120'%3E%3Ctext x='90' y='60' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 90 60)' fill='rgba(255,255,255,0.07)' font-size='16' font-family='sans-serif'%3E%E6%97%A0%E5%A3%B0%E6%97%A0%E8%AF%B4%3C/text%3E%3C/svg%3E");
+  position:fixed;inset:0;pointer-events:none;z-index:9998;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='120'%3E%3Ctext x='90' y='60' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 90 60)' fill='rgba(255,255,255,0.06)' stroke='rgba(0,0,0,0.3)' stroke-width='0.8' font-size='16' font-family='sans-serif'%3E%E6%97%A0%E5%A3%B0%E6%97%A0%E8%AF%B4%3C/text%3E%3C/svg%3E");
   background-repeat:repeat;
 }
 .export-status{
@@ -211,7 +211,6 @@ canvas#exportCanvas{display:none;}
   <div class="canvas-section">
     <div class="canvas-container" id="canvasContainer">
       <div class="canvas-drag-hint" id="dragHint">↕ 拖动调整位置 · 滚轮缩放</div>
-      <div class="watermark-overlay"></div>
     </div>
     <div class="export-status" id="exportStatus"></div>
     <canvas id="exportCanvas" width="2048" height="2048"></canvas>
@@ -731,18 +730,20 @@ async function exportJPG() {
 // Draw repeating watermark on canvas
 function drawWatermark(ctx) {
   ctx.save();
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.font = '28px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   var text = '无声无说';
   var spacing = 260;
-  // Draw a grid of rotated watermarks
   for (var y = -100; y < 2200; y += spacing) {
     for (var x = -100; x < 2200; x += spacing) {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(-45 * Math.PI / 180);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
       ctx.fillText(text, 0, 0);
       ctx.restore();
     }
@@ -821,5 +822,6 @@ if (parts.length > 0) {
   togglePart(parts[0].name);
 }
 </script>
+<div class="watermark-overlay"></div>
 </body>
 </html>
