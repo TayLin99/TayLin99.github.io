@@ -92,6 +92,23 @@ body{
 }
 canvas#exportCanvas{display:none;}
 
+/* Loading progress */
+.loading-bar-wrap{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;z-index:100;pointer-events:none;
+}
+.loading-bar-wrap .loading-text{
+  color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;margin-bottom:8px;
+}
+.loading-bar-wrap .loading-track{
+  width:200px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;
+}
+.loading-bar-wrap .loading-fill{
+  height:100%;background:var(--accent);border-radius:2px;transition:width 0.3s;
+  width:0%;
+}
+.loading-bar-wrap.done{opacity:0;transition:opacity 0.5s;pointer-events:none;}
+
 /* ===== Preview Modal (WeChat export) ===== */
 .preview-overlay{
   position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;
@@ -221,6 +238,10 @@ canvas#exportCanvas{display:none;}
     </div>
     <div class="export-status" id="exportStatus"></div>
     <canvas id="exportCanvas" width="2048" height="2048"></canvas>
+    <div class="loading-bar-wrap" id="loadingBar">
+      <div class="loading-text" id="loadingText">正在加载 0/86</div>
+      <div class="loading-track"><div class="loading-fill" id="loadingFill"></div></div>
+    </div>
   </div>
 
   <!-- Parts Panel -->
@@ -418,6 +439,19 @@ function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 
 // ===== Build canvas layers (sorted by z-index = layer order) =====
 const canvasContainer = document.getElementById('canvasContainer');
+const totalImgs = parts.reduce((s, p) => s + p.items.length, 0);
+let loadedImgs = 0;
+
+function updateLoadingBar() {
+  const pct = Math.round(loadedImgs / totalImgs * 100);
+  document.getElementById('loadingText').textContent = '正在加载 ' + loadedImgs + '/' + totalImgs;
+  document.getElementById('loadingFill').style.width = pct + '%';
+  if (loadedImgs >= totalImgs) {
+    setTimeout(() => {
+      document.getElementById('loadingBar').classList.add('done');
+    }, 400);
+  }
+}
 
 parts.forEach((part) => {
   layerEls[part.name] = [];
@@ -426,7 +460,9 @@ parts.forEach((part) => {
     img.className = 'layer-img hidden';
     img.src = item.path;
     img.style.zIndex = part.layerIndex;
-    img.onload = () => {
+    img.onload = img.onerror = () => {
+      loadedImgs++;
+      updateLoadingBar();
       if (state[part.name] === ii) img.classList.remove('hidden');
     };
     canvasContainer.appendChild(img);
