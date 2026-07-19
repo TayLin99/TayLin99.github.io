@@ -239,19 +239,19 @@ canvas#exportCanvas{display:none;}
 <script>
 // ===== Panel display order (top to bottom in sidebar) =====
 const PANEL_ORDER = [
-  '背景','身体','狗毛','眉毛','眼睛','鼻子','鼻子装饰',
+  '背景','身体','头发','眉毛','眼睛','鼻子','鼻子装饰',
   '腮红','嘴','衣服','手部配饰','配饰1','配饰2','配饰3','部位14'
 ];
 
 // ===== Layer order (bottom to top = z-index low to high) =====
 const LAYER_ORDER = [
-  '背景','部位14','身体','狗毛','眉毛','眼睛',
+  '背景','部位14','身体','头发','眉毛','眼睛',
   '鼻子','腮红','嘴','衣服','鼻子装饰','手部配饰',
   '配饰1','配饰2','配饰3'
 ];
 
 // ===== Display name overrides =====
-const DISPLAY_NAMES = {'狗毛':'头发'};
+const DISPLAY_NAMES = {};
 
 // ===== Parts that stay "none" by default / on reset =====
 const DEFAULT_NONE = ['部位14'];
@@ -272,11 +272,11 @@ const RAW_PARTS = [
   {folder:'身体',optional:false,files:[
     {id:'c24IdXyZOIrDr3dnFR0rz',path:'res/身体/c24IdXyZOIrDr3dnFR0rz.webp'}
   ]},
-  {folder:'狗毛',optional:true,files:[
-    {id:'bNMFJo1A2wTNF0cZoEdF5',path:'res/狗毛/bNMFJo1A2wTNF0cZoEdF5.webp'},
-    {id:'d1j-fZvY0zSBdd8gEbSL-',path:'res/狗毛/d1j-fZvY0zSBdd8gEbSL-.webp'},
-    {id:'q-D6vpjkr3hiDdeDmaKNh',path:'res/狗毛/q-D6vpjkr3hiDdeDmaKNh.webp'},
-    {id:'fmriavIymgY4igqzAuh9r',path:'res/狗毛/fmriavIymgY4igqzAuh9r.webp'}
+  {folder:'头发',optional:true,files:[
+    {id:'bNMFJo1A2wTNF0cZoEdF5',path:'res/头发/bNMFJo1A2wTNF0cZoEdF5.webp'},
+    {id:'d1j-fZvY0zSBdd8gEbSL-',path:'res/头发/d1j-fZvY0zSBdd8gEbSL-.webp'},
+    {id:'q-D6vpjkr3hiDdeDmaKNh',path:'res/头发/q-D6vpjkr3hiDdeDmaKNh.webp'},
+    {id:'fmriavIymgY4igqzAuh9r',path:'res/头发/fmriavIymgY4igqzAuh9r.webp'}
   ]},
   {folder:'眉毛',optional:true,files:[
     {id:'tXbz-g2uzP-ZzMoAfZoGa',path:'res/眉毛/tXbz-g2uzP-ZzMoAfZoGa.webp'},
