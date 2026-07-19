@@ -562,7 +562,6 @@ parts.forEach((part) => {
     thumb.className = 'item-thumb' + (sel === ii ? ' selected' : '');
     const thumbImg = document.createElement('img');
     thumbImg.src = item.path;
-    thumbImg.loading = 'lazy';
     thumb.appendChild(thumbImg);
     thumb.onclick = (e) => { e.stopPropagation(); selectItem(part.name, ii); };
     itemsRow.appendChild(thumb);
