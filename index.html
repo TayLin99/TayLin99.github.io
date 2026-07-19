@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>奇迹小树 - 捏人创作</title>
+<style>
+/* ===== Reset & Base ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1a2e;--surface:#16213e;--card:#0f3460;--accent:#e94560;
+  --text:#eaeaea;--text2:#a0a0b8;--radius:12px;--transition:0.2s ease;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;
+}
+
+/* ===== Header ===== */
+.header{
+  background:var(--surface);padding:10px 20px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(10px);flex-wrap:wrap;
+}
+.header .logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,#e94560,#ff6b6b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header .title{font-size:15px;font-weight:500;white-space:nowrap;}
+.header .author{font-size:12px;color:var(--text2);}
+.header .spacer{flex:1;}
+.header .btn-group{display:flex;gap:8px;}
+
+/* ===== Buttons ===== */
+.btn{
+  padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-size:13px;
+  font-weight:600;transition:all var(--transition);display:flex;align-items:center;gap:5px;
+  white-space:nowrap;
+}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#ff6b6b;transform:translateY(-1px);box-shadow:0 4px 12px rgba(233,69,96,0.4);}
+.btn-outline{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.15);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn:disabled{opacity:0.5;pointer-events:none;}
+
+/* ===== Toast ===== */
+.toast{
+  position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+  background:var(--accent);color:#fff;padding:10px 24px;border-radius:20px;
+  font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity 0.3s;
+  pointer-events:none;
+}
+.toast.show{opacity:1;}
+
+/* ===== Main Layout ===== */
+.main{
+  display:flex;gap:20px;padding:16px;max-width:1200px;margin:0 auto;
+  min-height:calc(100vh - 57px);align-items:flex-start;justify-content:center;
+}
+
+/* ===== Canvas Section ===== */
+.canvas-section{flex-shrink:0;position:sticky;top:76px;}
+.canvas-container{
+  position:relative;width:min(540px,calc(100vw - 400px));aspect-ratio:1;
+  background:var(--surface);border-radius:var(--radius);
+  box-shadow:0 8px 40px rgba(0,0,0,0.4);overflow:hidden;
+}
+.canvas-container .layer-img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:contain;pointer-events:none;transition:opacity 0.15s;
+}
+.canvas-container .layer-img.hidden{opacity:0;}
+.export-status{
+  text-align:center;font-size:11px;color:var(--text2);margin-top:8px;min-height:18px;
+}
+canvas#exportCanvas{display:none;}
+
+/* ===== Parts Panel ===== */
+.parts-panel{
+  flex:1;min-width:280px;max-width:360px;display:flex;flex-direction:column;gap:6px;
+  padding-bottom:40px;
+}
+.part-group{
+  background:var(--surface);border-radius:var(--radius);
+  border:1px solid rgba(255,255,255,0.05);overflow:hidden;
+  transition:all var(--transition);
+}
+.part-group.collapsed .part-body{display:none;}
+.part-group:not(.collapsed){border-color:var(--accent);}
+.part-header{
+  padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  user-select:none;font-size:13px;font-weight:600;transition:background 0.15s;
+}
+.part-header:hover{background:rgba(255,255,255,0.03);}
+.part-header .arrow{transition:transform 0.2s;font-size:10px;color:var(--text2);}
+.part-group:not(.collapsed) .part-header .arrow{transform:rotate(90deg);}
+.part-header .badge{
+  margin-left:auto;font-size:11px;background:var(--card);padding:2px 10px;
+  border-radius:20px;color:var(--text2);
+}
+.part-header .badge.has-selection{background:var(--accent);color:#fff;}
+.part-body{
+  padding:0 10px 10px;max-height:280px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--card) transparent;
+}
+.part-body .items-row{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));
+  gap:7px;
+}
+.item-thumb{
+  aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
+  border:2px solid transparent;background:var(--card);transition:all 0.15s;
+  position:relative;
+}
+.item-thumb:hover{border-color:rgba(255,255,255,0.2);transform:scale(1.04);}
+.item-thumb.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(233,69,96,0.3);}
+.item-thumb img{width:100%;height:100%;object-fit:contain;}
+.item-thumb .none-label{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--text2);font-size:18px;font-weight:300;
+}
+
+/* ===== Responsive ===== */
+@media(max-width:880px){
+  .main{flex-direction:column;align-items:center;padding:12px;gap:14px;}
+  .canvas-section{position:static;}
+  .canvas-container{width:min(420px,92vw);}
+  .parts-panel{width:100%;max-width:420px;}
+}
+@media(max-width:480px){
+  .header{padding:8px 12px;gap:6px;}
+  .header .title{font-size:13px;}
+  .btn{padding:6px 10px;font-size:11px;}
+  .canvas-container{width:92vw;}
+  .parts-panel{max-width:100%;}
+  .part-body .items-row{grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="logo">✦ 捏咔</span>
+  <span class="title">奇迹小树</span>
+  <span class="author">小马快跑</span>
+  <span class="spacer"></span>
+  <div class="btn-group">
+    <button class="btn btn-outline" onclick="randomize()">🎲 随机</button>
+    <button class="btn btn-outline" onclick="resetAll()">↺ 重置</button>
+    <button class="btn btn-primary" id="btnExport" onclick="exportJPG()">📥 导出</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Canvas -->
+  <div class="canvas-section">
+    <div class="canvas-container" id="canvasContainer"></div>
+    <div class="export-status" id="exportStatus"></div>
+    <canvas id="exportCanvas" width="2048" height="2048"></canvas>
+  </div>
+
+  <!-- Parts Panel -->
+  <div class="parts-panel" id="partsPanel"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Panel display order (top to bottom in sidebar) =====
+const PANEL_ORDER = [
+  '背景','身体','狗毛','眉毛','眼睛','鼻子','鼻子装饰',
+  '腮红','嘴','衣服','手部配饰','配饰1','配饰2','配饰3','部位14'
+];
+
+// ===== Layer order (bottom to top = z-index low to high) =====
+const LAYER_ORDER = [
+  '背景','部位14','身体','狗毛','眉毛','眼睛',
+  '鼻子','腮红','嘴','衣服','鼻子装饰','手部配饰',
+  '配饰1','配饰2','配饰3'
+];
+
+// ===== Display name overrides =====
+const DISPLAY_NAMES = {'狗毛':'头发'};
+
+// ===== Parts that stay "none" by default / on reset =====
+const DEFAULT_NONE = ['部位14'];
+
+// ===== Parts that CAN randomize to "none" =====
+const CAN_RANDOM_NONE = ['配饰1','配饰2','配饰3','鼻子装饰'];
+
+// ===== Embedded image data =====
+const RAW_PARTS = [
+  {folder:'背景',optional:true,files:[
+    {id:'gHbTmTrXmyGlPWx7R06zZIdVJ5wssQHr',path:'背景/gHbTmTrXmyGlPWx7R06zZIdVJ5wssQHr.jpg'},
+    {id:'7EMBFcCxDKbDm8YxYrwwEvH9lB9iRCFR',path:'背景/7EMBFcCxDKbDm8YxYrwwEvH9lB9iRCFR.png'},
+    {id:'ty4qj1Mnc5NJ2PH3T2O6x',path:'背景/ty4qj1Mnc5NJ2PH3T2O6x.jpg'},
+    {id:'WXLEldbbiM--FGE7QGZYe',path:'背景/WXLEldbbiM--FGE7QGZYe.jpg'},
+    {id:'ILoaik_PI-vPzrK-hnTkF',path:'背景/ILoaik_PI-vPzrK-hnTkF.jpg'},
+    {id:'Z9YZNaeYlYNm5Xn7EJill',path:'背景/Z9YZNaeYlYNm5Xn7EJill.jpg'}
+  ]},
+  {folder:'身体',optional:false,files:[
+    {id:'c24IdXyZOIrDr3dnFR0rz',path:'身体/c24IdXyZOIrDr3dnFR0rz.png'}
+  ]},
+  {folder:'狗毛',optional:true,files:[
+    {id:'bNMFJo1A2wTNF0cZoEdF5',path:'狗毛/bNMFJo1A2wTNF0cZoEdF5.png'},
+    {id:'d1j-fZvY0zSBdd8gEbSL-',path:'狗毛/d1j-fZvY0zSBdd8gEbSL-.png'},
+    {id:'q-D6vpjkr3hiDdeDmaKNh',path:'狗毛/q-D6vpjkr3hiDdeDmaKNh.png'},
+    {id:'fmriavIymgY4igqzAuh9r',path:'狗毛/fmriavIymgY4igqzAuh9r.png'}
+  ]},
+  {folder:'眉毛',optional:true,files:[
+    {id:'tXbz-g2uzP-ZzMoAfZoGa',path:'眉毛/tXbz-g2uzP-ZzMoAfZoGa.png'},
+    {id:'4oWgttuESbOhX2wOt7HP_',path:'眉毛/4oWgttuESbOhX2wOt7HP_.png'},
+    {id:'iUP5Tr-dWlyHc9nMiO_fw',path:'眉毛/iUP5Tr-dWlyHc9nMiO_fw.png'},
+    {id:'QNxn4FmSVEFklokZ762Ui',path:'眉毛/QNxn4FmSVEFklokZ762Ui.png'},
+    {id:'j8FgEg1umDQn65i0omR1H',path:'眉毛/j8FgEg1umDQn65i0omR1H.png'},
+    {id:'0HI5yGKid0_shfKSttN3v',path:'眉毛/0HI5yGKid0_shfKSttN3v.png'},
+    {id:'2XZAvY00IgmzkzSzhVbTE',path:'眉毛/2XZAvY00IgmzkzSzhVbTE.png'},
+    {id:'73O8IAj9fjoIzy8SBbgqL',path:'眉毛/73O8IAj9fjoIzy8SBbgqL.png'}
+  ]},
+  {folder:'眼睛',optional:true,files:[
+    {id:'v4KWm5Pt9UIaO5faCb7NK',path:'眼睛/v4KWm5Pt9UIaO5faCb7NK.png'},
+    {id:'9P5GRbFNS0gzdYQXdRwhO',path:'眼睛/9P5GRbFNS0gzdYQXdRwhO.png'},
+    {id:'PSN0zVILqfX6PePGMbaU3',path:'眼睛/PSN0zVILqfX6PePGMbaU3.png'},
+    {id:'4G_KLOP9CSZq-u5x1r3Lc',path:'眼睛/4G_KLOP9CSZq-u5x1r3Lc.png'},
+    {id:'xBL_BeXQ2xzTlpSyIeC8O',path:'眼睛/xBL_BeXQ2xzTlpSyIeC8O.png'},
+    {id:'6fMP4cDsKAgNTOOWXsv3j',path:'眼睛/6fMP4cDsKAgNTOOWXsv3j.png'},
+    {id:'og4Szx8ghE1R2AkRgcshM',path:'眼睛/og4Szx8ghE1R2AkRgcshM.png'},
+    {id:'X8I52f-P2fdjB9slK-J2f',path:'眼睛/X8I52f-P2fdjB9slK-J2f.png'}
+  ]},
+  {folder:'鼻子',optional:true,files:[
+    {id:'JgQf10da7KeF7HeBoiLg9',path:'鼻子/JgQf10da7KeF7HeBoiLg9.png'}
+  ]},
+  {folder:'鼻子装饰',optional:true,files:[
+    {id:'aoSZkBPg3-H9lUFbVE6vt',path:'鼻子装饰/aoSZkBPg3-H9lUFbVE6vt.png'},
+    {id:'Si7xJIOqypXcGUZms8Myd',path:'鼻子装饰/Si7xJIOqypXcGUZms8Myd.png'},
+    {id:'CND-9O_3VnmkMYKrayleG',path:'鼻子装饰/CND-9O_3VnmkMYKrayleG.png'},
+    {id:'7rlJekMHszFt2XVh-WKD2',path:'鼻子装饰/7rlJekMHszFt2XVh-WKD2.png'}
+  ]},
+  {folder:'腮红',optional:true,files:[
+    {id:'nFG2MCNrhLwCoWAIYQGO4',path:'腮红/nFG2MCNrhLwCoWAIYQGO4.png'},
+    {id:'WNxSEfOzlyt9een_0GmXQ',path:'腮红/WNxSEfOzlyt9een_0GmXQ.png'},
+    {id:'c1QjzeOCDNhIPvN9cDam-',path:'腮红/c1QjzeOCDNhIPvN9cDam-.png'},
+    {id:'t8mlStzwt5V1fqr1rAC9O',path:'腮红/t8mlStzwt5V1fqr1rAC9O.png'}
+  ]},
+  {folder:'嘴',optional:true,files:[
+    {id:'fRalkAVCjUc9jWmB_unmx',path:'嘴/fRalkAVCjUc9jWmB_unmx.png'},
+    {id:'tCcmmknzUA0kvWpJlNC4y',path:'嘴/tCcmmknzUA0kvWpJlNC4y.png'},
+    {id:'oNt7xyqTWVR1boJ_o9H9T',path:'嘴/oNt7xyqTWVR1boJ_o9H9T.png'},
+    {id:'T-RlembM5qvaxyxrE3gON',path:'嘴/T-RlembM5qvaxyxrE3gON.png'},
+    {id:'3mQFaCanu5n9yoO-BmVKx',path:'嘴/3mQFaCanu5n9yoO-BmVKx.png'},
+    {id:'I5xsd--ZTqYeXdzn9uSau',path:'嘴/I5xsd--ZTqYeXdzn9uSau.png'},
+    {id:'FIUvwMB_di-MRf1eTK5jL',path:'嘴/FIUvwMB_di-MRf1eTK5jL.png'},
+    {id:'XwJXygvnZkmBAtgYKBRTG',path:'嘴/XwJXygvnZkmBAtgYKBRTG.png'}
+  ]},
+  {folder:'衣服',optional:true,files:[
+    {id:'uqYh4cs2XMGVXJJ7Ek8Qj',path:'衣服/uqYh4cs2XMGVXJJ7Ek8Qj.png'},
+    {id:'zMz3GeIn97kh55duXcXvB',path:'衣服/zMz3GeIn97kh55duXcXvB.png'},
+    {id:'vpSANJMtcLePBW4h1yNHq',path:'衣服/vpSANJMtcLePBW4h1yNHq.png'},
+    {id:'5qs_X-zBGO3lAitDSNa-A',path:'衣服/5qs_X-zBGO3lAitDSNa-A.png'},
+    {id:'xv4O4XtWZCnyDPz-2U5YE',path:'衣服/xv4O4XtWZCnyDPz-2U5YE.png'},
+    {id:'mzGy_gqs_6irqtlkUG5PS',path:'衣服/mzGy_gqs_6irqtlkUG5PS.png'},
+    {id:'TcXrYNDKKLxRDuUTQlYt2',path:'衣服/TcXrYNDKKLxRDuUTQlYt2.png'}
+  ]},
+  {folder:'手部配饰',optional:true,files:[
+    {id:'VFnOmy_FDO6zaNCavFrFQ',path:'手部配饰/VFnOmy_FDO6zaNCavFrFQ.png'},
+    {id:'8EB0hmum6zc-MsrW-jHEz',path:'手部配饰/8EB0hmum6zc-MsrW-jHEz.png'},
+    {id:'Io6V2vbIO2oGGqwj-PBFP',path:'手部配饰/Io6V2vbIO2oGGqwj-PBFP.png'},
+    {id:'h5tNwn6CClqbMpd5F_d9i',path:'手部配饰/h5tNwn6CClqbMpd5F_d9i.png'},
+    {id:'zNIFt2398gSgWvNhCftUO',path:'手部配饰/zNIFt2398gSgWvNhCftUO.png'}
+  ]},
+  {folder:'配饰1',optional:true,files:[
+    {id:'X1U_6t4oRvRxULmFGKYBn',path:'配饰1/X1U_6t4oRvRxULmFGKYBn.png'},
+    {id:'dj7wgXqfrz5Pb11lABcCZ',path:'配饰1/dj7wgXqfrz5Pb11lABcCZ.png'},
+    {id:'TnYseqipGCNcFJ__G6gvX',path:'配饰1/TnYseqipGCNcFJ__G6gvX.png'},
+    {id:'fccIOpohwEbtLQ2zxKYXo',path:'配饰1/fccIOpohwEbtLQ2zxKYXo.png'},
+    {id:'hldg50m_XtDCfm_ZhEVao',path:'配饰1/hldg50m_XtDCfm_ZhEVao.png'},
+    {id:'wHW2zhHM8b4r15yKdO7KM',path:'配饰1/wHW2zhHM8b4r15yKdO7KM.png'},
+    {id:'qzy1mnQHN9rW2bAag29Fi',path:'配饰1/qzy1mnQHN9rW2bAag29Fi.png'},
+    {id:'taGF3d8UdwORbfcfM7SNZ',path:'配饰1/taGF3d8UdwORbfcfM7SNZ.png'},
+    {id:'PnIXvlzETLraOuaZGA9gy',path:'配饰1/PnIXvlzETLraOuaZGA9gy.png'},
+    {id:'nLRzspGSiXVnhSL5n8_HX',path:'配饰1/nLRzspGSiXVnhSL5n8_HX.png'}
+  ]},
+  {folder:'配饰2',optional:true,files:[
+    {id:'nQrenCpsFXWcA8j8ICkjd',path:'配饰2/nQrenCpsFXWcA8j8ICkjd.png'},
+    {id:'agaZsYUZr8LpXdcNwvgXq',path:'配饰2/agaZsYUZr8LpXdcNwvgXq.png'},
+    {id:'sh6EN1HbsytCX5ypkV2km',path:'配饰2/sh6EN1HbsytCX5ypkV2km.png'},
+    {id:'iZyDdx1C-DLWSXENEho5x',path:'配饰2/iZyDdx1C-DLWSXENEho5x.png'},
+    {id:'MfXkVSVm-afTZnsr4tAYh',path:'配饰2/MfXkVSVm-afTZnsr4tAYh.png'},
+    {id:'P2yraODLV5RbqH8Qr9O_J',path:'配饰2/P2yraODLV5RbqH8Qr9O_J.png'},
+    {id:'xZ7haITwy_yL2vH6hvbiT',path:'配饰2/xZ7haITwy_yL2vH6hvbiT.png'},
+    {id:'ptBQ5_2NHlALxTr6nuY0f',path:'配饰2/ptBQ5_2NHlALxTr6nuY0f.png'},
+    {id:'rMdonECPek7OT9CojQ7to',path:'配饰2/rMdonECPek7OT9CojQ7to.png'}
+  ]},
+  {folder:'配饰3',optional:true,files:[
+    {id:'luD-OClIzrtyroryA5WTb',path:'配饰3/luD-OClIzrtyroryA5WTb.png'},
+    {id:'rfAOLoCt0Z98DKmP7n9U3',path:'配饰3/rfAOLoCt0Z98DKmP7n9U3.png'},
+    {id:'v76AUMplCC8pLSk3sOuNl',path:'配饰3/v76AUMplCC8pLSk3sOuNl.png'},
+    {id:'C9PlmQFIajKaDQxmKiIU3',path:'配饰3/C9PlmQFIajKaDQxmKiIU3.png'},
+    {id:'xoMGftZGrdp4C3k5MXZSf',path:'配饰3/xoMGftZGrdp4C3k5MXZSf.png'},
+    {id:'rqcZdU8EslhSjSiIzRj78',path:'配饰3/rqcZdU8EslhSjSiIzRj78.png'},
+    {id:'MBnfp3oGqYnAm7n1W1h2z',path:'配饰3/MBnfp3oGqYnAm7n1W1h2z.png'},
+    {id:'uxRrX357Vtd_WYY7OtLeP',path:'配饰3/uxRrX357Vtd_WYY7OtLeP.png'},
+    {id:'r3r4mG42bozDV1EvN2JJT',path:'配饰3/r3r4mG42bozDV1EvN2JJT.png'}
+  ]},
+  {folder:'部位14',optional:true,files:[
+    {id:'OkQuwO5xKkcXfvfNh6ZbjO6IlxHafzMn',path:'部位14/OkQuwO5xKkcXfvfNh6ZbjO6IlxHafzMn.jpg'},
+    {id:'EfvGRheQFgO7U87vZsxxG',path:'部位14/EfvGRheQFgO7U87vZsxxG.jpg'}
+  ]}
+];
+
+// ===== Build ordered parts with display names =====
+const partMap = {};
+RAW_PARTS.forEach(p => { partMap[p.folder] = p; });
+
+// Build layer index map
+const layerIndexMap = {};
+LAYER_ORDER.forEach((name, i) => { layerIndexMap[name] = i; });
+
+// Build parts in PANEL_ORDER for display
+const parts = PANEL_ORDER.map(name => {
+  const data = partMap[name];
+  if (!data) return null;
+  return {
+    name: name,
+    displayName: DISPLAY_NAMES[name] || name,
+    optional: data.optional,
+    items: data.files,
+    layerIndex: layerIndexMap[name] !== undefined ? layerIndexMap[name] : 999
+  };
+}).filter(Boolean);
+
+// ===== State =====
+const state = {};       // part.name -> selectedIndex (-1 = none)
+const layerEls = {};    // part.name -> [img elements]
+
+// Init state: first item selected, except DEFAULT_NONE
+parts.forEach((part, pi) => {
+  state[part.name] = DEFAULT_NONE.includes(part.name) ? -1 : (part.items.length > 0 ? 0 : -1);
+});
+
+let expandedPart = null; // currently expanded part name (accordion)
+
+// ===== Build canvas layers (sorted by z-index = layer order) =====
+const canvasContainer = document.getElementById('canvasContainer');
+
+parts.forEach((part) => {
+  layerEls[part.name] = [];
+  part.items.forEach((item, ii) => {
+    const img = document.createElement('img');
+    img.className = 'layer-img hidden';
+    img.src = item.path;
+    img.style.zIndex = part.layerIndex;
+    img.onload = () => {
+      if (state[part.name] === ii) img.classList.remove('hidden');
+    };
+    canvasContainer.appendChild(img);
+    layerEls[part.name][ii] = img;
+  });
+});
+
+// ===== Build parts panel =====
+const partsPanel = document.getElementById('partsPanel');
+
+parts.forEach((part) => {
+  const group = document.createElement('div');
+  group.className = 'part-group collapsed';
+  group.dataset.partName = part.name;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'part-header';
+  const sel = state[part.name];
+  const badgeText = sel >= 0 ? (sel + 1) + '/' + part.items.length : '无';
+  header.innerHTML = '<span class="arrow">▶</span><span>' + part.displayName + '</span><span class="badge' + (sel >= 0 ? ' has-selection' : '') + '">' + badgeText + '</span>';
+  header.onclick = () => togglePart(part.name);
+  group.appendChild(header);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'part-body';
+  const itemsRow = document.createElement('div');
+  itemsRow.className = 'items-row';
+
+  // "None" option for optional parts
+  if (part.optional) {
+    const noneThumb = document.createElement('div');
+    noneThumb.className = 'item-thumb' + (sel === -1 ? ' selected' : '');
+    noneThumb.innerHTML = '<div class="none-label">✕</div>';
+    noneThumb.onclick = (e) => { e.stopPropagation(); selectItem(part.name, -1); };
+    itemsRow.appendChild(noneThumb);
+  }
+
+  part.items.forEach((item, ii) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'item-thumb' + (sel === ii ? ' selected' : '');
+    const thumbImg = document.createElement('img');
+    thumbImg.src = item.path;
+    thumbImg.loading = 'lazy';
+    thumb.appendChild(thumbImg);
+    thumb.onclick = (e) => { e.stopPropagation(); selectItem(part.name, ii); };
+    itemsRow.appendChild(thumb);
+  });
+
+  body.appendChild(itemsRow);
+  group.appendChild(body);
+  partsPanel.appendChild(group);
+});
+
+// ===== Accordion toggle (auto-collapse others only, no hiding) =====
+function togglePart(partName) {
+  if (expandedPart === partName) {
+    // Collapse current → all show as collapsed headers
+    expandedPart = null;
+    partsPanel.querySelectorAll('.part-group').forEach(g => g.classList.add('collapsed'));
+  } else {
+    // Collapse previous, expand this one
+    expandedPart = partName;
+    partsPanel.querySelectorAll('.part-group').forEach(g => {
+      g.classList.toggle('collapsed', g.dataset.partName !== partName);
+    });
+    const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+    if (group) group.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// ===== Select item =====
+function selectItem(partName, ii) {
+  state[partName] = ii;
+
+  // Update canvas
+  const els = layerEls[partName];
+  if (els) {
+    els.forEach((img, idx) => img.classList.toggle('hidden', idx !== ii));
+  }
+
+  // Update panel UI
+  refreshPartUI(partName);
+}
+
+// ===== Refresh part UI =====
+function refreshPartUI(partName) {
+  const part = parts.find(p => p.name === partName);
+  if (!part) return;
+  const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+  if (!group) return;
+
+  const sel = state[partName];
+  const badge = group.querySelector('.badge');
+  badge.textContent = sel >= 0 ? (sel + 1) + '/' + part.items.length : '无';
+  badge.classList.toggle('has-selection', sel >= 0);
+
+  const thumbs = group.querySelectorAll('.item-thumb');
+  thumbs.forEach((t, idx) => {
+    if (part.optional) {
+      t.classList.toggle('selected', idx === 0 ? sel === -1 : (idx - 1) === sel);
+    } else {
+      t.classList.toggle('selected', idx === sel);
+    }
+  });
+}
+
+// ===== Reset all =====
+function resetAll() {
+  parts.forEach(part => {
+    const newVal = DEFAULT_NONE.includes(part.name) ? -1 : (part.items.length > 0 ? 0 : -1);
+    state[part.name] = newVal;
+    const els = layerEls[part.name];
+    if (els) els.forEach((img, idx) => img.classList.toggle('hidden', idx !== newVal));
+    refreshPartUI(part.name);
+  });
+  showToast('↺ 已重置');
+}
+
+// ===== Randomize =====
+function randomize() {
+  parts.forEach(part => {
+    let newVal;
+    if (DEFAULT_NONE.includes(part.name)) {
+      // 部位14 always stays "none"
+      newVal = -1;
+    } else if (CAN_RANDOM_NONE.includes(part.name)) {
+      // 配饰1/2/3, 鼻子装饰: 50% chance of "none"
+      newVal = Math.random() < 0.4 ? -1 : Math.floor(Math.random() * part.items.length);
+    } else if (part.optional) {
+      // Other optional parts: always pick an item (never "none")
+      newVal = Math.floor(Math.random() * part.items.length);
+    } else {
+      // Required parts: always pick an item
+      newVal = Math.floor(Math.random() * part.items.length);
+    }
+    state[part.name] = newVal;
+    const els = layerEls[part.name];
+    if (els) els.forEach((img, idx) => img.classList.toggle('hidden', idx !== newVal));
+    refreshPartUI(part.name);
+  });
+  showToast('🎲 随机搭配完成');
+}
+
+// ===== Export JPG (fetch+blobURL+Image avoids tainted canvas in file://) =====
+async function exportJPG() {
+  const statusEl = document.getElementById('exportStatus');
+  const btnExport = document.getElementById('btnExport');
+  btnExport.disabled = true;
+  statusEl.textContent = '⏳ 正在合成...';
+
+  const exportCanvas = document.getElementById('exportCanvas');
+  const ctx = exportCanvas.getContext('2d');
+  ctx.clearRect(0, 0, 2048, 2048);
+
+  try {
+    // Collect layers (bottom to top = LAYER_ORDER)
+    const layers = [];
+    for (const name of LAYER_ORDER) {
+      const selIdx = state[name];
+      if (selIdx < 0) continue;
+      const part = parts.find(p => p.name === name);
+      if (!part) continue;
+      layers.push(part.items[selIdx].path);
+    }
+
+    // fetch each image as blob, load via blob: URL (does NOT taint canvas)
+    for (const src of layers) {
+      const img = await loadCleanImage(src);
+      ctx.drawImage(img, 0, 0, 2048, 2048);
+    }
+
+    // Canvas is clean → export
+    exportCanvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = '奇迹小树_' + Date.now() + '.jpg';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        statusEl.textContent = '✅ 导出成功！';
+      } else {
+        statusEl.textContent = '❌ 导出失败，请重试';
+      }
+      btnExport.disabled = false;
+    }, 'image/jpeg', 0.92);
+  } catch (err) {
+    statusEl.textContent = '❌ 导出失败: ' + err.message;
+    btnExport.disabled = false;
+  }
+}
+
+// Load image via XHR+blob URL to avoid tainted canvas (fetch blocked in file://)
+function loadCleanImage(src) {
+  return new Promise((resolve, reject) => {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', src, true);
+    xhr.responseType = 'blob';
+    xhr.onload = function() {
+      // file:// returns status 0 on success
+      if (xhr.status === 200 || xhr.status === 0) {
+        var objectUrl = URL.createObjectURL(xhr.response);
+        var img = new Image();
+        img.onload = function() { resolve(img); };
+        img.onerror = function() { reject(new Error('图片解码失败')); };
+        img.src = objectUrl;
+      } else {
+        reject(new Error('XHR status ' + xhr.status));
+      }
+    };
+    xhr.onerror = function() { reject(new Error('XHR 请求失败')); };
+    xhr.send();
+  });
+}
+
+// ===== Toast =====
+let toastTimer;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ===== Init: expand the first part (背景) =====
+if (parts.length > 0) {
+  togglePart(parts[0].name);
+}
+</script>
+</body>
+</html>
