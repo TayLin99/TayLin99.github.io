@@ -185,7 +185,7 @@
     <span>⇄ 左右晃 = 摸头</span>
     <span>⇅ 上下晃 = 摸头</span>
   </div>
-  <div id="foot">BGM 为浏览器合成的占位曲；音效「大狗」「叫」用浏览器文字转语音生成。替换真实素材见顶部 TRACKS / SFX 配置</div>
+  <div id="foot">BGM 已使用真实音频；音效「大狗」「叫」仍为浏览器文字转语音占位，替换真实素材见顶部 SFX 配置</div>
 
   <div id="overlay">
     <div class="card">
@@ -203,11 +203,11 @@
  * 音效不填 url 时用浏览器文字转语音念「大狗」「叫」；不支持语音时回退到程序合成。
  * ===================================================================== */
 const TRACKS = [
-  {name:'欸？大狗！',           link:'https://b23.tv/Eh56pbP', url:'', bpm:122, bars:8,  root:60, scale:[0,2,4,5,7,9,11,12], seed:1, feel:'bounce'},
-  {name:'我的悲伤是狗叫的',     link:'https://b23.tv/fYywQYs', url:'', bpm:80,  bars:8,  root:57, scale:[0,2,3,5,7,8,10,12], seed:2, feel:'sad'},
-  {name:'叫SET! 1小时纯享版',   link:'https://b23.tv/wmWhGzs', url:'', bpm:152, bars:16, root:52, scale:[0,3,5,7,8,10,12,15], seed:3, feel:'angry'},
-  {name:'🐶 叫 香 🐶',          link:'https://b23.tv/9vIHLdV', url:'', bpm:110, bars:8,  root:60, scale:[0,2,4,7,9,12,14],    seed:4, feel:'goofy'},
-  {name:'疯一样的大狗',         link:'https://b23.tv/zbouIAM', url:'', bpm:140, bars:16, root:55, scale:[0,2,4,7,9,12],       seed:5, feel:'energy'},
+  {name:'欸？大狗！',           link:'https://b23.tv/Eh56pbP', url:'bgm/欸？大狗！.m4a', bpm:122, bars:8,  root:60, scale:[0,2,4,5,7,9,11,12], seed:1, feel:'bounce'},
+  {name:'我的悲伤是狗叫的',     link:'https://b23.tv/fYywQYs', url:'bgm/我的悲伤是狗叫的.m4a', bpm:80,  bars:8,  root:57, scale:[0,2,3,5,7,8,10,12], seed:2, feel:'sad'},
+  {name:'叫SET! 1小时纯享版',   link:'https://b23.tv/wmWhGzs', url:'bgm/叫SET!.m4a', bpm:152, bars:16, root:52, scale:[0,3,5,7,8,10,12,15], seed:3, feel:'angry'},
+  {name:'🐶 叫 香 🐶',          link:'https://b23.tv/9vIHLdV', url:'bgm/🐶叫香🐶.m4a', bpm:110, bars:8,  root:60, scale:[0,2,4,7,9,12,14],    seed:4, feel:'goofy'},
+  {name:'疯一样的大狗',         link:'https://b23.tv/zbouIAM', url:'bgm/疯一样的大狗.m4a', bpm:140, bars:16, root:55, scale:[0,2,4,7,9,12],       seed:5, feel:'energy'},
 ];
 /* 音效占位（后续换成真实文件路径即可，如 './sfx/dagou.wav'）；未填时用浏览器文字转语音念「大狗」「叫」 */
 const SFX_DOG_URL  = '';  // 音效1：大狗
