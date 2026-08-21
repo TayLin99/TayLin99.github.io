@@ -13,7 +13,7 @@
     font-family:'PingFang SC','Microsoft YaHei',system-ui,-apple-system,sans-serif;
     background:radial-gradient(1200px 800px at 50% 28%, #fff7ec, #ffe3c4 58%, #ffd2a6);
     display:flex;flex-direction:column;align-items:center;
-    overflow:hidden;user-select:none;-webkit-user-select:none;
+    overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
   }
   #title{
     margin-top:26px;
@@ -59,6 +59,7 @@
     position:relative;padding:90px 130px;
     border:2px dashed rgba(122,63,16,.30);border-radius:44px;
     cursor:pointer;
+    touch-action:none;-webkit-tap-highlight-color:transparent;
   }
   #hitZone::after{
     content:'互动区 · 鼠标在图片周围更大范围也能触发';
@@ -161,7 +162,7 @@
   <a id="backBtn" href="../">← 主页</a>
 
   <h1 id="title">大狗叫叫叫</h1>
-  <div id="subtitle">按住左键叫叫叫 · 左右/上下晃动手感互动</div>
+  <div id="subtitle">按住叫叫叫 · 左右/上下晃动手感互动</div>
 
   <div id="nowPill" class="hidden">
     <span id="nowIcon">♪</span>
@@ -180,10 +181,9 @@
   </div>
 
   <div id="hints">
-    <span>🖱 悬停 = 严肃</span>
-    <span>⇄ 左右晃动 = 摸头</span>
-    <span>⇅ 上下晃动 = 摸头</span>
-    <span>🐶 按住左键 = 严肃 + 呼吸，松手 = 持续叫叫叫（×2 时长）</span>
+    <span>👆 按住 = 严肃 + 叫叫叫，松手持续叫</span>
+    <span>⇄ 左右晃 = 摸头</span>
+    <span>⇅ 上下晃 = 摸头</span>
   </div>
   <div id="foot">BGM 为浏览器合成的占位曲；音效「大狗」「叫」用浏览器文字转语音生成。替换真实素材见顶部 TRACKS / SFX 配置</div>
 
@@ -221,6 +221,8 @@ const RATE_STEP  = 0.1;        // 每次升调幅度（速度 0.1x）
 const RATE_STEP_MS = 350;      // 升调间隔 ms
 const WIGGLE_THR = 70;         // 判定为“来回晃”所需的累计位移 px
 const WIGGLE_COOLDOWN = 1400;  // 一次摸头动画后的冷却 ms
+const HOLD_DELAY = 160;        // 触摸长按判定：按住这么久才开始叫
+const HOLD_MOVE_THRESHOLD = 12;// 触摸移动超过该像素即视为“想摸头”而非“想叫”
 
 /* ---------- DOM ---------- */
 const dogImg   = document.getElementById('dog');
@@ -245,6 +247,7 @@ let woofBuf=null, barkBuf=null;
 let mouseInside=false, lastX=0, lastY=0, wasOverDog=false;
 let hCur=0,vCur=0,hRight=false,hLeft=false,vUp=false,vDown=false;
 let hAnimUntil=0,vAnimUntil=0;
+let touchId=null, tStartX=0, tStartY=0, tLastX=0, tLastY=0, tMoved=false, holdTimer=null;
 let ttsVoice=null, dogUtter=null, breatheTimer=null, breatheAnim=null;
 
 const bgmAudio = new Audio();
@@ -573,22 +576,8 @@ function overDog(x,y){
   const r=dogImg.getBoundingClientRect();
   return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
 }
-hitZone.addEventListener('mouseenter', e=>{
-  mouseInside=true; lastX=e.clientX; lastY=e.clientY; wasOverDog=overDog(e.clientX,e.clientY); refreshDog();
-});
-hitZone.addEventListener('mouseleave', ()=>{
-  mouseInside=false; wasOverDog=false;
-  hCur=0;vCur=0;hRight=hLeft=vUp=vDown=false;
-  refreshDog();
-});
-hitZone.addEventListener('mousemove', e=>{
-  if(holding){ lastX=e.clientX; lastY=e.clientY; wasOverDog=false; return; }
-  /* 摸头统计：只有鼠标真正移到大狗图上才开始累计，避免把互动区里的移动也算进去 */
-  const od=overDog(e.clientX,e.clientY);
-  if(!od){ wasOverDog=false; lastX=e.clientX; lastY=e.clientY; return; }
-  if(!wasOverDog){ wasOverDog=true; lastX=e.clientX; lastY=e.clientY; return; }
-  const dx=e.clientX-lastX, dy=e.clientY-lastY;
-  lastX=e.clientX; lastY=e.clientY;
+function resetWiggle(){ hCur=0; vCur=0; hRight=hLeft=vUp=vDown=false; }
+function applyWiggle(dx, dy){
   hCur+=dx; vCur+=dy;
   if(hCur> WIGGLE_THR){ hRight=true; hCur= WIGGLE_THR; }
   if(hCur<-WIGGLE_THR){ hLeft =true; hCur=-WIGGLE_THR; }
@@ -602,6 +591,28 @@ hitZone.addEventListener('mousemove', e=>{
     vUp=vDown=false; vCur=0; vAnimUntil=now+WIGGLE_COOLDOWN;
     triggerWiggle('v');
   }
+}
+
+hitZone.addEventListener('mouseenter', e=>{
+  if(touchId!==null) return;
+  mouseInside=true; lastX=e.clientX; lastY=e.clientY; wasOverDog=overDog(e.clientX,e.clientY); refreshDog();
+});
+hitZone.addEventListener('mouseleave', ()=>{
+  if(touchId!==null) return;
+  mouseInside=false; wasOverDog=false;
+  resetWiggle();
+  refreshDog();
+});
+hitZone.addEventListener('mousemove', e=>{
+  if(touchId!==null) return;
+  if(holding){ lastX=e.clientX; lastY=e.clientY; wasOverDog=false; return; }
+  /* 摸头统计：只有鼠标真正移到大狗图上才开始累计，避免把互动区里的移动也算进去 */
+  const od=overDog(e.clientX,e.clientY);
+  if(!od){ wasOverDog=false; lastX=e.clientX; lastY=e.clientY; return; }
+  if(!wasOverDog){ wasOverDog=true; lastX=e.clientX; lastY=e.clientY; return; }
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  applyWiggle(dx, dy);
 });
 
 /* =====================================================================
@@ -695,16 +706,71 @@ function ensureStarted(){
 }
 
 hitZone.addEventListener('mousedown', e=>{
+  if(touchId!==null) return;
   if(e.button!==0) return;
   e.preventDefault();
   startBark();
 });
-window.addEventListener('mouseup', e=>{ if(e.button===0) endBark(); });
+window.addEventListener('mouseup', e=>{ if(touchId===null && e.button===0) endBark(); });
 
-/* 触屏支持：按住即叫 */
-hitZone.addEventListener('touchstart', e=>{ e.preventDefault(); startBark(); }, {passive:false});
-hitZone.addEventListener('touchmove',  e=>{ e.preventDefault(); }, {passive:false});
-window.addEventListener('touchend',  e=>{ endBark(); });
+/* =====================================================================
+ * 触屏支持：长按 = 叫叫叫；左右/上下滑动 = 摸头（与鼠标逻辑共用 applyWiggle）
+ * ===================================================================== */
+function findTouch(e, id){
+  const lists = [e.touches, e.changedTouches];
+  for(let k=0;k<lists.length;k++){
+    const list = lists[k];
+    if(!list) continue;
+    for(let i=0;i<list.length;i++) if(list[i].identifier===id) return list[i];
+  }
+  return null;
+}
+
+hitZone.addEventListener('touchstart', e=>{
+  if(touchId!==null) return;               // 只跟踪第一根手指
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  if(!t) return;
+  touchId = t.identifier;
+  tStartX = tLastX = t.clientX;
+  tStartY = tLastY = t.clientY;
+  tMoved = false;
+  resetWiggle();
+  mouseInside = true;                       // 触摸时显示严肃脸
+  refreshDog();
+  holdTimer = setTimeout(()=>{ holdTimer=null; startBark(); }, HOLD_DELAY);
+}, {passive:false});
+
+window.addEventListener('touchmove', e=>{
+  if(touchId===null) return;
+  const t = findTouch(e, touchId);
+  if(!t) return;
+  e.preventDefault();
+  const dx = t.clientX - tLastX, dy = t.clientY - tLastY;
+  tLastX = t.clientX; tLastY = t.clientY;
+  if(!tMoved){
+    /* 移动超过阈值才算“想摸头”，并取消长按叫叫叫；否则继续等待长按 */
+    if(Math.abs(t.clientX - tStartX) + Math.abs(t.clientY - tStartY) <= HOLD_MOVE_THRESHOLD) return;
+    tMoved = true;
+    if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; }
+  }
+  applyWiggle(dx, dy);
+}, {passive:false});
+
+function finishTouch(){
+  if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; }
+  if(holding) endBark();
+  touchId=null;
+  mouseInside=false;
+  resetWiggle();
+  refreshDog();
+}
+window.addEventListener('touchend', e=>{
+  if(touchId===null) return;
+  if(!findTouch(e, touchId)) return;       // 不是追踪中的那根手指抬起
+  finishTouch();
+});
+window.addEventListener('touchcancel', finishTouch);
 </script>
 </body>
 </html>
