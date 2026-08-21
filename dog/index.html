@@ -44,7 +44,7 @@
   #nowPill.hidden{display:none}
   #nowIcon{font-size:18px}
   #nowState{font-weight:700}
-  #nowPill.paused #nowState{color:#c0392b}
+  #nowPill.ducked #nowState{color:#b9770e}
   #nowLink{color:#1f6fd6;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(31,111,214,.5)}
   #nowLink:hover{color:#0f4fb0}
   #skipBtn{
@@ -185,7 +185,7 @@
     <span>⇄ 左右晃 = 摸头</span>
     <span>⇅ 上下晃 = 摸头</span>
   </div>
-  <div id="foot">BGM 已使用真实音频；音效「大狗」「叫」仍为浏览器文字转语音占位，替换真实素材见顶部 SFX 配置</div>
+  <div id="foot">BGM 已使用真实音频；音效「大狗」「叫」暂用文字转语音占位，把文件放到 dog/sfx/大狗.m4a 与 dog/sfx/叫.m4a 即可替换</div>
 
   <div id="overlay">
     <div class="card">
@@ -210,8 +210,8 @@ const TRACKS = [
   {name:'疯一样的大狗',         link:'https://b23.tv/zbouIAM', url:'bgm/疯一样的大狗.m4a', bpm:140, bars:16, root:55, scale:[0,2,4,7,9,12],       seed:5, feel:'energy'},
 ];
 /* 音效占位（后续换成真实文件路径即可，如 './sfx/dagou.wav'）；未填时用浏览器文字转语音念「大狗」「叫」 */
-const SFX_DOG_URL  = '';  // 音效1：大狗
-const SFX_BARK_URL = '';  // 音效2：叫
+const SFX_DOG_URL  = 'sfx/大狗.m4a';  // 音效1：大狗（把真实文件放到 dog/sfx/大狗.m4a 即可替换）
+const SFX_BARK_URL = 'sfx/叫.m4a';    // 音效2：叫（把真实文件放到 dog/sfx/叫.m4a 即可替换）
 const USE_TTS = typeof window!=='undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
 /* ---------- 交互参数 ---------- */
@@ -223,6 +223,8 @@ const WIGGLE_THR = 70;         // 判定为“来回晃”所需的累计位移 
 const WIGGLE_COOLDOWN = 1400;  // 一次摸头动画后的冷却 ms
 const HOLD_DELAY = 160;        // 触摸长按判定：按住这么久才开始叫
 const HOLD_MOVE_THRESHOLD = 12;// 触摸移动超过该像素即视为“想摸头”而非“想叫”
+const BGM_VOLUME = 0.75;        // BGM 正常音量
+const BGM_DUCK_VOLUME = 0.2;    // 音效（大狗/叫）触发时 BGM 压低到的音量
 
 /* ---------- DOM ---------- */
 const dogImg   = document.getElementById('dog');
@@ -242,7 +244,7 @@ Object.values(IMG).forEach(src=>{ const im=new Image(); im.src=src; });
 let actx=null, started=false;
 let holding=false, barkPlaying=false, holdStart=0;
 let woofSrc=null, woofGain=null, barkSrc=null, rateTimer=null;
-let rate=START_RATE, trackIndex=-1, bgmPaused=false;
+let rate=START_RATE, trackIndex=-1;
 let woofBuf=null, barkBuf=null;
 let mouseInside=false, lastX=0, lastY=0, wasOverDog=false;
 let hCur=0,vCur=0,hRight=false,hLeft=false,vUp=false,vDown=false;
@@ -251,7 +253,7 @@ let touchId=null, tStartX=0, tStartY=0, tLastX=0, tLastY=0, tMoved=false, holdTi
 let ttsVoice=null, dogUtter=null, breatheTimer=null, breatheAnim=null;
 
 const bgmAudio = new Audio();
-bgmAudio.volume = 0.75;
+bgmAudio.volume = BGM_VOLUME;
 
 /* =====================================================================
  * 音频合成（占位）—— 全部在浏览器本地生成，无需联网
@@ -353,7 +355,7 @@ function speakDogWord(){
   window.speechSynthesis.speak(u);
 }
 
-/* 松手：念一串「叫」填满 2 倍按住时长 */
+/* 松手：念一串「叫」填满按住时长 */
 function speakBark(durSec){
   const n=Math.max(2, Math.round(durSec*2.5));
   const u=new SpeechSynthesisUtterance('叫'.repeat(n));
@@ -408,7 +410,9 @@ function finishBark(){
   barkPlaying=false;
   stopShake(); stopZoom();
   refreshDog();
-  if(bgmPaused){ bgmPaused=false; nowState.textContent='▶ 播放中'; nowPill.classList.remove('paused'); bgmAudio.play().catch(()=>{}); }
+  bgmAudio.volume = BGM_VOLUME;
+  nowState.textContent='▶ 播放中';
+  nowPill.classList.remove('ducked');
 }
 
 function bufferFromSamples(actx,samples){
@@ -512,9 +516,8 @@ async function playTrack(t){
   nowLink.textContent = t.name;
   nowLink.href = t.link;
   nowState.textContent = '▶ 播放中';
-  nowPill.classList.remove('paused');
+  nowPill.classList.remove('ducked');
   nowPill.classList.remove('hidden');
-  if(bgmPaused) return; // 正在按住叫叫叫，等叫声结束再续播
   try{ await bgmAudio.play(); }catch(e){}
 }
 
@@ -616,7 +619,7 @@ hitZone.addEventListener('mousemove', e=>{
 });
 
 /* =====================================================================
- * 按住叫叫叫（音调/速度爬升 + 松手 2 倍叫声）
+ * 按住叫叫叫（音调/速度爬升 + 松手叫声，时长 = 按住时长）
  * ===================================================================== */
 async function startBark(){
   await ensureStarted();
@@ -627,8 +630,9 @@ async function startBark(){
   stopShake(); stopZoom();
   dogImg.classList.remove('anim-h'); vWrap.classList.remove('anim-v');
   holding=true; holdStart=performance.now();
-  bgmAudio.pause(); bgmPaused=true; nowState.textContent='⏸ 暂停中';
-  nowPill.classList.add('paused');
+  bgmAudio.volume = BGM_DUCK_VOLUME;
+  nowState.textContent='🔉 小声';
+  nowPill.classList.add('ducked');
   rate=START_RATE;
 
   if(woofBuf){  // 有音频缓冲（真实素材或旧占位合成）
@@ -654,7 +658,7 @@ function endBark(){
   holding=false;
   clearInterval(rateTimer);
   const holdMs=performance.now()-holdStart;
-  const barkDur=Math.max(0.3, Math.min(20, holdMs*2/1000));
+  const barkDur=Math.max(0.3, Math.min(20, holdMs/1000));
 
   if(dogUtter){ dogUtter.onend=null; dogUtter=null; }
   if(USE_TTS) window.speechSynthesis.cancel();
