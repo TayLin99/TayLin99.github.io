@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大狗叫叫叫</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{color-scheme:light}
+  html,body{height:100%}
+  body{
+    min-height:100vh;
+    font-family:'PingFang SC','Microsoft YaHei',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(1200px 800px at 50% 28%, #fff7ec, #ffe3c4 58%, #ffd2a6);
+    display:flex;flex-direction:column;align-items:center;
+    overflow:hidden;user-select:none;-webkit-user-select:none;
+  }
+  #title{
+    margin-top:26px;
+    font-size:50px;font-weight:900;letter-spacing:8px;
+    color:#7a3f10;text-shadow:0 3px 0 rgba(0,0,0,.06);
+  }
+  #subtitle{margin-top:4px;font-size:14px;color:#a06a33;letter-spacing:3px;}
+
+  /* ---- back to home ---- */
+  #backBtn{
+    position:fixed;top:18px;left:18px;z-index:60;
+    display:flex;align-items:center;gap:6px;
+    background:rgba(255,255,255,.82);backdrop-filter:blur(8px);
+    border:1px solid rgba(122,63,16,.2);border-radius:999px;
+    padding:8px 16px;font-size:14px;color:#7a3f10;text-decoration:none;
+    box-shadow:0 4px 12px rgba(122,63,16,.12);
+  }
+  #backBtn:hover{background:#ffe3c4}
+
+  /* ---- now playing pill ---- */
+  #nowPill{
+    margin-top:20px;display:flex;align-items:center;gap:10px;
+    background:rgba(255,255,255,.78);backdrop-filter:blur(8px);
+    border:1px solid rgba(122,63,16,.18);border-radius:999px;
+    padding:8px 16px;box-shadow:0 6px 18px rgba(122,63,16,.12);
+    font-size:14px;color:#7a3f10;
+  }
+  #nowPill.hidden{display:none}
+  #nowIcon{font-size:18px}
+  #nowState{font-weight:700}
+  #nowPill.paused #nowState{color:#c0392b}
+  #nowLink{color:#1f6fd6;text-decoration:none;font-weight:600;border-bottom:1px dashed rgba(31,111,214,.5)}
+  #nowLink:hover{color:#0f4fb0}
+  #skipBtn{
+    margin-left:4px;border:1px solid rgba(122,63,16,.3);background:#fff;
+    color:#7a3f10;border-radius:999px;padding:4px 12px;font-size:13px;cursor:pointer;
+  }
+  #skipBtn:hover{background:#ffe3c4}
+
+  /* ---- stage ---- */
+  #stage{flex:1;display:flex;align-items:center;justify-content:center;width:100%;padding:24px}
+  #hitZone{
+    position:relative;padding:90px 130px;
+    border:2px dashed rgba(122,63,16,.30);border-radius:44px;
+    cursor:pointer;
+  }
+  #hitZone::after{
+    content:'互动区 · 鼠标在图片周围更大范围也能触发';
+    position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);
+    font-size:12px;color:#a06a33;background:rgba(255,255,255,.65);
+    padding:2px 10px;border-radius:8px;white-space:nowrap;
+  }
+  #vWrap{will-change:transform}
+  #dog{
+    display:block;width:min(44vmin,430px);height:auto;
+    border-radius:18px;box-shadow:0 20px 55px rgba(122,63,16,.38);
+    pointer-events:none;transform-style:preserve-3d;will-change:transform;
+  }
+
+  @keyframes wiggleY{
+    0%{transform:rotateY(0)}
+    15%{transform:rotateY(-22deg)}
+    35%{transform:rotateY(16deg)}
+    55%{transform:rotateY(-11deg)}
+    75%{transform:rotateY(6deg)}
+    100%{transform:rotateY(0)}
+  }
+  #dog.anim-h{animation:wiggleY .34s ease-in-out 3;transform-origin:center}
+
+  @keyframes wiggleX{
+    0%{transform:translateY(0)}
+    15%{transform:translateY(-20px)}
+    35%{transform:translateY(15px)}
+    55%{transform:translateY(-10px)}
+    75%{transform:translateY(5px)}
+    100%{transform:translateY(0)}
+  }
+  #vWrap.anim-v{animation:wiggleX .34s ease-in-out 3}
+
+  /* 地动山摇 + 持续放大 */
+  @keyframes quake{
+    0%{transform:translate(0,0) rotate(0)}
+    20%{transform:translate(-7px,4px) rotate(-.6deg)}
+    40%{transform:translate(6px,-5px) rotate(.5deg)}
+    60%{transform:translate(-5px,-3px) rotate(-.4deg)}
+    80%{transform:translate(4px,5px) rotate(.4deg)}
+    100%{transform:translate(0,0) rotate(0)}
+  }
+  #hitZone.shake{animation:quake .26s linear infinite}
+  @keyframes quakeSoft{
+    0%{transform:translate(0,0)}
+    25%{transform:translate(-2px,1px)}
+    50%{transform:translate(2px,-1px)}
+    75%{transform:translate(-1px,2px)}
+    100%{transform:translate(0,0)}
+  }
+  body.page-shake{animation:quakeSoft .45s linear infinite}
+  @keyframes zoomIn{from{transform:scale(1)}to{transform:scale(1.3)}}
+  #dog.zooming{animation:zoomIn var(--zoom-dur,3s) linear forwards}
+
+  /* ---- hints ---- */
+  #hints{
+    padding:14px 20px 18px;display:flex;gap:26px;flex-wrap:wrap;justify-content:center;
+    font-size:14px;color:#8a5a24;
+  }
+  #foot{
+    padding-bottom:10px;font-size:12px;color:#b08a5a;text-align:center;
+    padding-left:16px;padding-right:16px;
+  }
+
+  /* ---- start overlay ---- */
+  #overlay{
+    position:fixed;inset:0;z-index:50;
+    background:rgba(255,247,236,.82);backdrop-filter:blur(10px);
+    display:flex;align-items:center;justify-content:center;
+  }
+  #overlay.hidden{display:none}
+  .card{
+    text-align:center;background:#fff;border-radius:28px;padding:46px 60px;
+    box-shadow:0 24px 70px rgba(122,63,16,.25);
+  }
+  .card .big{font-size:84px;line-height:1}
+  .card h1{margin-top:18px;font-size:40px;letter-spacing:8px;color:#7a3f10}
+  .card p{margin-top:10px;font-size:14px;color:#a06a33;letter-spacing:1px}
+  #startBtn{
+    margin-top:26px;font-size:20px;font-weight:800;letter-spacing:4px;
+    padding:14px 44px;border:none;border-radius:999px;cursor:pointer;
+    color:#fff;background:linear-gradient(135deg,#f59e0b,#e07a1f);
+    box-shadow:0 10px 26px rgba(224,122,31,.4);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  #startBtn:hover{filter:brightness(1.06)}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+
+  @media (max-width:640px){
+    #title{font-size:34px;letter-spacing:4px}
+    #dog{width:min(70vmin,330px)}
+    #hitZone{padding:70px 40px}
+    #hints{flex-direction:column;gap:8px;align-items:center}
+  }
+</style>
+</head>
+<body>
+
+  <a id="backBtn" href="../">← 主页</a>
+
+  <h1 id="title">大狗叫叫叫</h1>
+  <div id="subtitle">按住左键叫叫叫 · 左右/上下晃动手感互动</div>
+
+  <div id="nowPill" class="hidden">
+    <span id="nowIcon">♪</span>
+    <span id="nowLabel">正在播放</span>
+    <span id="nowState">▶</span>
+    <a id="nowLink" href="#" target="_blank" rel="noopener"></a>
+    <button id="skipBtn" title="随机切到下一首">跳过</button>
+  </div>
+
+  <div id="stage">
+    <div id="hitZone">
+      <div id="vWrap">
+        <img id="dog" src="大狗笑.png" alt="大狗" draggable="false">
+      </div>
+    </div>
+  </div>
+
+  <div id="hints">
+    <span>🖱 悬停 = 严肃</span>
+    <span>⇄ 左右晃动 = 摸头</span>
+    <span>⇅ 上下晃动 = 摸头</span>
+    <span>🐶 按住左键 = 严肃 + 呼吸，松手 = 持续叫叫叫（×2 时长）</span>
+  </div>
+  <div id="foot">BGM 为浏览器合成的占位曲；音效「大狗」「叫」用浏览器文字转语音生成。替换真实素材见顶部 TRACKS / SFX 配置</div>
+
+  <div id="overlay">
+    <div class="card">
+      <div class="big">🐶</div>
+      <h1>大狗叫叫叫</h1>
+      <p>有声互动 · 点击任意处开始</p>
+      <button id="startBtn">点我开始</button>
+    </div>
+  </div>
+
+<script>
+'use strict';
+/* =====================================================================
+ * 配置区：以后拿到真实 BGM / 音效素材，往这里填 url 即可（相对路径或链接）
+ * 音效不填 url 时用浏览器文字转语音念「大狗」「叫」；不支持语音时回退到程序合成。
+ * ===================================================================== */
+const TRACKS = [
+  {name:'欸？大狗！',           link:'https://b23.tv/Eh56pbP', url:'', bpm:122, bars:8,  root:60, scale:[0,2,4,5,7,9,11,12], seed:1, feel:'bounce'},
+  {name:'我的悲伤是狗叫的',     link:'https://b23.tv/fYywQYs', url:'', bpm:80,  bars:8,  root:57, scale:[0,2,3,5,7,8,10,12], seed:2, feel:'sad'},
+  {name:'叫SET! 1小时纯享版',   link:'https://b23.tv/wmWhGzs', url:'', bpm:152, bars:16, root:52, scale:[0,3,5,7,8,10,12,15], seed:3, feel:'angry'},
+  {name:'🐶 叫 香 🐶',          link:'https://b23.tv/9vIHLdV', url:'', bpm:110, bars:8,  root:60, scale:[0,2,4,7,9,12,14],    seed:4, feel:'goofy'},
+  {name:'疯一样的大狗',         link:'https://b23.tv/zbouIAM', url:'', bpm:140, bars:16, root:55, scale:[0,2,4,7,9,12],       seed:5, feel:'energy'},
+];
+/* 音效占位（后续换成真实文件路径即可，如 './sfx/dagou.wav'）；未填时用浏览器文字转语音念「大狗」「叫」 */
+const SFX_DOG_URL  = '';  // 音效1：大狗
+const SFX_BARK_URL = '';  // 音效2：叫
+const USE_TTS = typeof window!=='undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+
+/* ---------- 交互参数 ---------- */
+const START_RATE = 0.5;        // 长按起始音调：-1 八度（即 0.5x）
+const MAX_RATE   = 2.0;        // 长按最高音调
+const RATE_STEP  = 0.1;        // 每次升调幅度（速度 0.1x）
+const RATE_STEP_MS = 350;      // 升调间隔 ms
+const WIGGLE_THR = 70;         // 判定为“来回晃”所需的累计位移 px
+const WIGGLE_COOLDOWN = 1400;  // 一次摸头动画后的冷却 ms
+
+/* ---------- DOM ---------- */
+const dogImg   = document.getElementById('dog');
+const vWrap    = document.getElementById('vWrap');
+const hitZone  = document.getElementById('hitZone');
+const overlay  = document.getElementById('overlay');
+const nowPill  = document.getElementById('nowPill');
+const nowState = document.getElementById('nowState');
+const nowLink  = document.getElementById('nowLink');
+const skipBtn  = document.getElementById('skipBtn');
+
+const IMG = { serious:'大狗严肃.jpg', smile:'大狗笑.png', pet:'大狗摸头.jpg', bark:'大狗叫.jpg' };
+/* 预加载 4 张图，避免切换时闪烁 */
+Object.values(IMG).forEach(src=>{ const im=new Image(); im.src=src; });
+
+/* ---------- 全局状态 ---------- */
+let actx=null, started=false;
+let holding=false, barkPlaying=false, holdStart=0;
+let woofSrc=null, woofGain=null, barkSrc=null, rateTimer=null;
+let rate=START_RATE, trackIndex=-1, bgmPaused=false;
+let woofBuf=null, barkBuf=null;
+let mouseInside=false, lastX=0, lastY=0, wasOverDog=false;
+let hCur=0,vCur=0,hRight=false,hLeft=false,vUp=false,vDown=false;
+let hAnimUntil=0,vAnimUntil=0;
+let ttsVoice=null, dogUtter=null, breatheTimer=null, breatheAnim=null;
+
+const bgmAudio = new Audio();
+bgmAudio.volume = 0.75;
+
+/* =====================================================================
+ * 音频合成（占位）—— 全部在浏览器本地生成，无需联网
+ * ===================================================================== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+
+function encodeWAV(samples,sampleRate){
+  const n=samples.length, buffer=new ArrayBuffer(44+n*2), view=new DataView(buffer);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF'); view.setUint32(4,36+n*2,true); ws(8,'WAVE');
+  ws(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,1,true); view.setUint32(24,sampleRate,true);
+  view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+  ws(36,'data'); view.setUint32(40,n*2,true);
+  let off=44;
+  for(let i=0;i<n;i++){
+    const s=Math.max(-1,Math.min(1,samples[i]));
+    view.setInt16(off, s<0 ? s*0x8000 : s*0x7fff, true); off+=2;
+  }
+  return new Blob([buffer],{type:'audio/wav'});
+}
+
+/* 音效1：大狗（低沉“嗷呜”低吼） */
+function renderWoof(sr){
+  const dur=0.38, n=Math.floor(dur*sr), out=new Float32Array(n);
+  let ph=0, phN=0;
+  for(let i=0;i<n;i++){
+    const t=i/sr;
+    const f=360*Math.pow(130/360, t/dur);
+    ph=(ph+2*Math.PI*f/sr)%(2*Math.PI);
+    let saw=0; for(let h=1;h<=6;h++) saw+=Math.sin(h*ph)/h;
+    phN=(phN+123457)%65536; const noise=(phN/32768)-1;
+    const env=Math.min(1,t/0.015)*Math.pow(1-t/dur,1.6);
+    const lp=0.5+0.5*Math.min(1,(900-600*t/dur)/900);
+    out[i]=(saw*0.55+noise*0.5)*env*lp;
+  }
+  return out;
+}
+
+/* 音效2：叫（持续的长叫，音调有明显高低起伏，整段可无缝循环填满时长） */
+function renderHowl(sr){
+  const L=3.0, seam=0.06;                 // 3 秒一段，内含多次大起伏
+  const phraseLen=Math.floor(L*sr), seamN=Math.floor(seam*sr);
+  const totalLen=phraseLen+seamN;
+  const R=new Float32Array(totalLen);
+  const period=1.5;                       // 起伏周期（s）
+  let ph=0, noisePh=12345, lp=0;
+  for(let i=0;i<totalLen;i++){
+    const t=i/sr;
+    const lfo=Math.sin(2*Math.PI*t/period);
+    const f=300*Math.pow(2, 1.1*lfo);     // 基频在约 143Hz ~ 642Hz 之间大幅摆动
+    const vib=1+0.03*Math.sin(2*Math.PI*5.5*t+1.3); // 轻微颤音更像“叫”
+    const ff=f*vib;
+    ph=(ph+2*Math.PI*ff/sr)%(2*Math.PI);
+    let saw=0; for(let h=1;h<=5;h++) saw+=Math.sin(h*ph)/h;
+    const square=Math.sin(ph)>0?0.5:-0.5;
+    noisePh=(noisePh+918273)%65536; const noise=(noisePh/32768)-1;
+    const cut=Math.min(0.92,(ff*2.6)/sr); // 低通截止跟随基频，声音更圆润像人声
+    lp += cut*((saw+square)-lp);
+    const env=Math.min(1,t/0.05);         // 起始 50ms 淡入防爆音
+    R[i]=(lp*0.5+noise*0.05)*env;
+  }
+  // 无缝循环：把段尾接续交叉渐变到段头，loop 时无爆点
+  const B=new Float32Array(phraseLen);
+  for(let i=0;i<phraseLen;i++){
+    if(i<seamN){
+      const a=i/seamN;
+      B[i]=R[i]*a + R[phraseLen+i]*(1-a);
+    }else{
+      B[i]=R[i];
+    }
+  }
+  let peak=0; for(const v of B) peak=Math.max(peak,Math.abs(v));
+  if(peak>0){ const g=0.85/peak; for(let i=0;i<B.length;i++) B[i]*=g; }
+  return B;
+}
+
+/* ---------- 文字转语音（占位音效：「大狗」「叫」） ---------- */
+function getTTSVoice(){
+  if(ttsVoice) return ttsVoice;
+  const vs=window.speechSynthesis.getVoices();
+  ttsVoice=vs.find(v=>v.lang&&v.lang.toLowerCase().startsWith('zh')) ||
+           vs.find(v=>v.lang&&v.lang.toLowerCase().startsWith('cmn')) || null;
+  return ttsVoice;
+}
+if(USE_TTS) window.speechSynthesis.onvoiceschanged=()=>{ ttsVoice=null; getTTSVoice(); };
+
+/* 长按：循环念「大狗」，音调/语速随 rate 上升 */
+function speakDogWord(){
+  if(!holding) return;
+  const u=new SpeechSynthesisUtterance('大狗');
+  u.lang='zh-CN';
+  if(getTTSVoice()) u.voice=getTTSVoice();
+  u.pitch=Math.min(2, Math.max(0.1, rate));
+  u.rate=Math.min(2, Math.max(0.5, rate*0.85));
+  dogUtter=u;
+  u.onend=()=>{ dogUtter=null; if(holding) speakDogWord(); };
+  u.onerror=()=>{ dogUtter=null; };
+  window.speechSynthesis.speak(u);
+}
+
+/* 松手：念一串「叫」填满 2 倍按住时长 */
+function speakBark(durSec){
+  const n=Math.max(2, Math.round(durSec*2.5));
+  const u=new SpeechSynthesisUtterance('叫'.repeat(n));
+  u.lang='zh-CN';
+  if(getTTSVoice()) u.voice=getTTSVoice();
+  u.pitch=Math.min(2, Math.max(0.5, rate));
+  u.rate=1;
+  u.onend=finishBark;
+  u.onerror=finishBark;
+  window.speechSynthesis.speak(u);
+}
+
+/* ---------- 长按呼吸（跟「音效-大狗」速度同步） ---------- */
+function startBreathing(){
+  stopBreathing();
+  const tick=()=>{
+    const dur=Math.max(150, Math.min(2500, 600/rate));
+    breatheAnim=dogImg.animate(
+      [{transform:'scale(1)'},{transform:'scale(1.07)'},{transform:'scale(1)'}],
+      {duration:dur, easing:'ease-in-out'}
+    );
+    breatheTimer=setTimeout(tick, dur);
+  };
+  tick();
+}
+function stopBreathing(){
+  clearTimeout(breatheTimer);
+  if(breatheAnim){ try{ breatheAnim.cancel(); }catch(e){} breatheAnim=null; }
+}
+
+/* ---------- 叫的时候：地动山摇 + 持续放大 ---------- */
+function startShake(){
+  hitZone.classList.add('shake');
+  document.body.classList.add('page-shake');
+}
+function stopShake(){
+  hitZone.classList.remove('shake');
+  document.body.classList.remove('page-shake');
+}
+function startZoom(durSec){
+  dogImg.classList.remove('zooming');
+  void dogImg.offsetWidth;
+  dogImg.style.setProperty('--zoom-dur', durSec+'s');
+  dogImg.classList.add('zooming');
+}
+function stopZoom(){
+  dogImg.classList.remove('zooming');
+}
+
+function finishBark(){
+  if(!barkPlaying) return;
+  barkPlaying=false;
+  stopShake(); stopZoom();
+  refreshDog();
+  if(bgmPaused){ bgmPaused=false; nowState.textContent='▶ 播放中'; nowPill.classList.remove('paused'); bgmAudio.play().catch(()=>{}); }
+}
+
+function bufferFromSamples(actx,samples){
+  const buf=actx.createBuffer(1,samples.length,actx.sampleRate);
+  buf.getChannelData(0).set(samples);
+  return buf;
+}
+
+/* 占位 BGM：按曲风参数离线渲染一小段循环旋律 */
+function renderTrack(cfg){
+  const sr=22050, bpm=cfg.bpm, spb=60/bpm, beats=cfg.bars*4;
+  const dur=beats*spb+0.2;
+  const ctx=new OfflineAudioContext(1,Math.ceil(dur*sr),sr);
+  const master=ctx.createGain(); master.gain.value=0.9;
+  const comp=ctx.createDynamicsCompressor();
+  comp.threshold.value=-14; comp.ratio.value=6; comp.knee.value=20;
+  master.connect(comp); comp.connect(ctx.destination);
+  const rng=mulberry32(cfg.seed);
+  const mf=m=>440*Math.pow(2,(m-69)/12);
+  const pick=a=>a[Math.floor(rng()*a.length)];
+  const feel=cfg.feel;
+
+  const kick=(t,v)=>{const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(150,t);
+    o.frequency.exponentialRampToValueAtTime(46,t+0.11);
+    g.gain.setValueAtTime(0.9*v,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.13);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t+0.15);};
+
+  const hat=(t,v)=>{const n=ctx.createBufferSource();
+    const len=Math.floor(sr*0.04), b=ctx.createBuffer(1,len,sr), d=b.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*(1-i/len);
+    n.buffer=b; const f=ctx.createBiquadFilter(); f.type='highpass'; f.frequency.value=7000;
+    const g=ctx.createGain(); g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.035);
+    n.connect(f); f.connect(g); g.connect(master); n.start(t);};
+
+  const bass=(freq,t,d,vol)=>{const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=freq;
+    const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=650; f.Q.value=1.2;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.02);
+    g.gain.setValueAtTime(vol,t+d-0.02); g.gain.linearRampToValueAtTime(0.0001,t+d);
+    o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t+d+0.05);};
+
+  const lead=(freq,t,d,vol)=>{const o=ctx.createOscillator(); o.type='square'; o.frequency.value=freq;
+    const f=ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=2400; f.Q.value=2;
+    const g=ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.03);
+    g.gain.setValueAtTime(vol,Math.max(t,t+d-0.03)); g.gain.linearRampToValueAtTime(0.0001,t+d);
+    o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t+d+0.05);};
+
+  const onKick=b=>{
+    if(feel==='angry') return true;
+    if(feel==='energy') return b%2===0;
+    if(feel==='sad') return b%4===0 || b%4===2;
+    if(feel==='goofy') return b%4===0 || (b%4===2 && rng()<0.4);
+    return b%2===0;
+  };
+  const onBass=b=>{
+    if(feel==='angry') return true;
+    if(feel==='energy') return true;
+    if(feel==='sad') return b%4===0 || b%4===3;
+    return b%2===0;
+  };
+  const bassDur=b=>{
+    if(feel==='angry') return spb*0.9;
+    if(feel==='energy') return spb*0.45;
+    return spb*1.7;
+  };
+  const leadP = feel==='sad'?0.3 : feel==='angry'?0.72 : feel==='energy'?0.6 : feel==='goofy'?0.5 : 0.52;
+
+  for(let b=0;b<beats;b++){
+    const t=b*spb;
+    if(onKick(b)) kick(t, feel==='sad'?0.5:1);
+    hat(t+spb*0.5, 0.12);
+    if(onBass(b)) bass(mf(cfg.root-12+pick(cfg.scale)), t, bassDur(b), feel==='angry'?0.38:0.3);
+    for(let s=0;s<2;s++){
+      const lt=t+s*spb/2;
+      if(rng()<leadP){
+        const note = (feel==='goofy' && rng()<0.25) ? cfg.root+24+pick(cfg.scale) : cfg.root+12+pick(cfg.scale);
+        lead(mf(note), lt, feel==='angry'?spb*0.9/2:spb*0.8, feel==='sad'?0.14:0.18);
+      }
+    }
+  }
+  return ctx.startRendering().then(buf=>encodeWAV(buf.getChannelData(0), sr));
+}
+
+/* =====================================================================
+ * 播放器：BGM 队列 + 现在播放 UI
+ * ===================================================================== */
+function pickNext(){
+  const others=TRACKS.filter((_,i)=>i!==trackIndex);
+  return others[Math.floor(Math.random()*others.length)];
+}
+
+async function playTrack(t){
+  if(!t.audioUrl){
+    if(t.url){ t.audioUrl = t.url; }
+    else { t.blob = await renderTrack(t); t.audioUrl = URL.createObjectURL(t.blob); }
+  }
+  trackIndex = TRACKS.indexOf(t);
+  bgmAudio.src = t.audioUrl;
+  nowLink.textContent = t.name;
+  nowLink.href = t.link;
+  nowState.textContent = '▶ 播放中';
+  nowPill.classList.remove('paused');
+  nowPill.classList.remove('hidden');
+  if(bgmPaused) return; // 正在按住叫叫叫，等叫声结束再续播
+  try{ await bgmAudio.play(); }catch(e){}
+}
+
+bgmAudio.addEventListener('ended', ()=>{ if(started) playTrack(pickNext()); });
+
+async function startExperience(){
+  if(started) return;
+  if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  await actx.resume().catch(()=>{});
+  if(SFX_DOG_URL){
+    try{ const r=await fetch(SFX_DOG_URL); woofBuf=await actx.decodeAudioData(await r.arrayBuffer()); }catch(e){}
+  }
+  if(SFX_BARK_URL){
+    try{ const r=await fetch(SFX_BARK_URL); barkBuf=await actx.decodeAudioData(await r.arrayBuffer()); }catch(e){}
+  }
+  if(!woofBuf && !USE_TTS) woofBuf=bufferFromSamples(actx, renderWoof(actx.sampleRate));
+  if(!barkBuf && !USE_TTS) barkBuf=bufferFromSamples(actx, renderHowl(actx.sampleRate));
+  started=true;
+  overlay.classList.add('hidden');
+  playTrack(pickNext());
+}
+
+overlay.addEventListener('click', ()=>{ startExperience(); });
+
+skipBtn.addEventListener('click', ()=>{ if(started && !holding && !barkPlaying) playTrack(pickNext()); });
+
+/* =====================================================================
+ * 图片状态机 + 摸头互动
+ * ===================================================================== */
+function refreshDog(){
+  let src;
+  if(barkPlaying)                 src=IMG.bark;
+  else if(holding)                src=IMG.serious;
+  else if(dogImg.classList.contains('anim-h') || vWrap.classList.contains('anim-v')) src=IMG.pet;
+  else if(mouseInside)            src=IMG.serious;
+  else                            src=IMG.smile;
+  const full=new URL(src, location.href).href;
+  if(dogImg.src!==full) dogImg.src=src;
+}
+
+function triggerWiggle(axis){
+  if(axis==='h'){
+    dogImg.classList.remove('anim-h');
+    void dogImg.offsetWidth;
+    dogImg.classList.add('anim-h');
+  }else{
+    vWrap.classList.remove('anim-v');
+    void vWrap.offsetWidth;
+    vWrap.classList.add('anim-v');
+  }
+  refreshDog();
+}
+
+dogImg.addEventListener('animationend', ()=>{ dogImg.classList.remove('anim-h'); refreshDog(); });
+vWrap.addEventListener('animationend', ()=>{ vWrap.classList.remove('anim-v'); refreshDog(); });
+dogImg.addEventListener('dragstart', e=>e.preventDefault());
+
+function overDog(x,y){
+  const r=dogImg.getBoundingClientRect();
+  return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
+}
+hitZone.addEventListener('mouseenter', e=>{
+  mouseInside=true; lastX=e.clientX; lastY=e.clientY; wasOverDog=overDog(e.clientX,e.clientY); refreshDog();
+});
+hitZone.addEventListener('mouseleave', ()=>{
+  mouseInside=false; wasOverDog=false;
+  hCur=0;vCur=0;hRight=hLeft=vUp=vDown=false;
+  refreshDog();
+});
+hitZone.addEventListener('mousemove', e=>{
+  if(holding){ lastX=e.clientX; lastY=e.clientY; wasOverDog=false; return; }
+  /* 摸头统计：只有鼠标真正移到大狗图上才开始累计，避免把互动区里的移动也算进去 */
+  const od=overDog(e.clientX,e.clientY);
+  if(!od){ wasOverDog=false; lastX=e.clientX; lastY=e.clientY; return; }
+  if(!wasOverDog){ wasOverDog=true; lastX=e.clientX; lastY=e.clientY; return; }
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  hCur+=dx; vCur+=dy;
+  if(hCur> WIGGLE_THR){ hRight=true; hCur= WIGGLE_THR; }
+  if(hCur<-WIGGLE_THR){ hLeft =true; hCur=-WIGGLE_THR; }
+  if(vCur> WIGGLE_THR){ vDown =true; vCur= WIGGLE_THR; }
+  if(vCur<-WIGGLE_THR){ vUp   =true; vCur=-WIGGLE_THR; }
+  const now=performance.now();
+  if(hRight&&hLeft&&now>hAnimUntil){
+    hRight=hLeft=false; hCur=0; hAnimUntil=now+WIGGLE_COOLDOWN;
+    triggerWiggle('h');
+  }else if(vUp&&vDown&&now>vAnimUntil){
+    vUp=vDown=false; vCur=0; vAnimUntil=now+WIGGLE_COOLDOWN;
+    triggerWiggle('v');
+  }
+});
+
+/* =====================================================================
+ * 按住叫叫叫（音调/速度爬升 + 松手 2 倍叫声）
+ * ===================================================================== */
+async function startBark(){
+  await ensureStarted();
+  if(holding) return;
+  if(barkSrc){ try{ barkSrc.onended=null; barkSrc.stop(); }catch(e){} barkSrc=null; }
+  if(USE_TTS) window.speechSynthesis.cancel();
+  barkPlaying=false;
+  stopShake(); stopZoom();
+  dogImg.classList.remove('anim-h'); vWrap.classList.remove('anim-v');
+  holding=true; holdStart=performance.now();
+  bgmAudio.pause(); bgmPaused=true; nowState.textContent='⏸ 暂停中';
+  nowPill.classList.add('paused');
+  rate=START_RATE;
+
+  if(woofBuf){  // 有音频缓冲（真实素材或旧占位合成）
+    woofSrc=actx.createBufferSource(); woofSrc.buffer=woofBuf; woofSrc.loop=true;
+    woofGain=actx.createGain(); woofGain.gain.value=0.5;
+    woofSrc.connect(woofGain); woofGain.connect(actx.destination);
+    woofSrc.playbackRate.value=rate;
+    woofSrc.start();
+  }else if(USE_TTS){  // 文字转语音念「大狗」
+    speakDogWord();
+  }
+
+  rateTimer=setInterval(()=>{
+    rate=Math.min(MAX_RATE, rate+RATE_STEP);
+    if(woofSrc) woofSrc.playbackRate.value=rate;
+  }, RATE_STEP_MS);
+  startBreathing();
+  refreshDog();
+}
+
+function endBark(){
+  if(!holding) return;
+  holding=false;
+  clearInterval(rateTimer);
+  const holdMs=performance.now()-holdStart;
+  const barkDur=Math.max(0.3, Math.min(20, holdMs*2/1000));
+
+  if(dogUtter){ dogUtter.onend=null; dogUtter=null; }
+  if(USE_TTS) window.speechSynthesis.cancel();
+
+  if(woofSrc){  // Web Audio 版「大狗」低吼（真实素材/旧占位）
+    const oldWoof=woofSrc, oldWoofGain=woofGain;
+    if(oldWoofGain){
+      const t=actx.currentTime;
+      oldWoofGain.gain.cancelScheduledValues(t);
+      oldWoofGain.gain.setValueAtTime(Math.max(0.0001,oldWoofGain.gain.value), t);
+      oldWoofGain.gain.exponentialRampToValueAtTime(0.001, t+0.04);
+    }
+    setTimeout(()=>{
+      try{ oldWoof.stop(); }catch(e){}
+      if(woofSrc===oldWoof) woofSrc=null;
+      if(woofGain===oldWoofGain) woofGain=null;
+    }, 90);
+  }
+
+  barkPlaying=true;
+  if(barkBuf){  // 有音频缓冲 → Web Audio 循环填满时长
+    barkSrc=actx.createBufferSource(); barkSrc.buffer=barkBuf; barkSrc.loop=true;
+    barkSrc.playbackRate.value=Math.max(0.5, rate);
+    const bg=actx.createGain();
+    barkSrc.connect(bg); bg.connect(actx.destination);
+    barkSrc.start();
+    const t=actx.currentTime, endT=t+barkDur;
+    bg.gain.setValueAtTime(0.0001,t);
+    bg.gain.linearRampToValueAtTime(0.7, t+0.03);
+    bg.gain.setValueAtTime(0.7, Math.max(t+0.03, endT-0.15));
+    bg.gain.linearRampToValueAtTime(0.0001, endT);
+    barkSrc.stop(endT+0.05);
+    barkSrc.onended=()=>{ barkSrc=null; finishBark(); };
+  }else if(USE_TTS){  // 文字转语音念「叫」
+    speakBark(barkDur);
+  }else{
+    finishBark();
+  }
+
+  stopBreathing();
+  startZoom(barkDur);
+  startShake();
+  refreshDog();
+}
+
+function ensureStarted(){
+  if(started) return Promise.resolve();
+  return startExperience();
+}
+
+hitZone.addEventListener('mousedown', e=>{
+  if(e.button!==0) return;
+  e.preventDefault();
+  startBark();
+});
+window.addEventListener('mouseup', e=>{ if(e.button===0) endBark(); });
+
+/* 触屏支持：按住即叫 */
+hitZone.addEventListener('touchstart', e=>{ e.preventDefault(); startBark(); }, {passive:false});
+hitZone.addEventListener('touchmove',  e=>{ e.preventDefault(); }, {passive:false});
+window.addEventListener('touchend',  e=>{ endBark(); });
+</script>
+</body>
+</html>
