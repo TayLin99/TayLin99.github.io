@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>捏捏Doll</title>
+<style>
+/* ===== Reset & Base ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#1a1a2e;--surface:#16213e;--card:#0f3460;--accent:#e94560;
+  --text:#eaeaea;--text2:#a0a0b8;--radius:12px;--transition:0.2s ease;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;
+}
+
+/* ===== Header ===== */
+.header{
+  background:var(--surface);padding:10px 20px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(10px);flex-wrap:wrap;
+}
+.header .logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,#e94560,#ff6b6b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header .title{font-size:15px;font-weight:500;white-space:nowrap;}
+.header .author{font-size:12px;color:var(--text2);}
+.header .spacer{flex:1;}
+.header .btn-group{display:flex;gap:8px;flex-shrink:0;margin-left:auto;}
+
+/* ===== Buttons ===== */
+.btn{
+  padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-size:13px;
+  font-weight:600;transition:all var(--transition);display:flex;align-items:center;gap:5px;
+  white-space:nowrap;
+}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#ff6b6b;transform:translateY(-1px);box-shadow:0 4px 12px rgba(233,69,96,0.4);}
+.btn-outline{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,0.15);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn:disabled{opacity:0.5;pointer-events:none;}
+a.btn{text-decoration:none;}
+
+/* ===== Toast ===== */
+.toast{
+  position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+  background:var(--accent);color:#fff;padding:10px 24px;border-radius:20px;
+  font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity 0.3s;
+  pointer-events:none;
+}
+.toast.show{opacity:1;}
+
+/* ===== Main Layout ===== */
+.main{
+  display:flex;gap:20px;padding:16px;max-width:1200px;margin:0 auto;
+  min-height:calc(100vh - 57px);align-items:flex-start;justify-content:center;
+}
+
+/* ===== Canvas Section ===== */
+.canvas-section{flex-shrink:0;position:sticky;top:76px;}
+.canvas-container{
+  position:relative;width:min(540px,calc(100vw - 400px));aspect-ratio:1;
+  background-image:
+    linear-gradient(45deg,rgba(255,255,255,0.06) 25%,transparent 25%),
+    linear-gradient(-45deg,rgba(255,255,255,0.06) 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,rgba(255,255,255,0.06) 75%),
+    linear-gradient(-45deg,transparent 75%,rgba(255,255,255,0.06) 75%);
+  background-size:60px 60px;
+  background-position:0 0,0 30px,30px -30px,-30px 0;
+  background-color:#1a1a2e;
+  border-radius:var(--radius);
+  box-shadow:0 8px 40px rgba(0,0,0,0.4);overflow:hidden;
+}
+.canvas-container .layer-img{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  object-fit:contain;pointer-events:none;transition:opacity 0.15s;
+}
+.canvas-container .canvas-watermark{
+  position:absolute;inset:0;pointer-events:none;z-index:9999;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='120'%3E%3Ctext x='90' y='60' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 90 60)' fill='rgba(255,255,255,0.08)' stroke='rgba(0,0,0,0.4)' stroke-width='1' font-size='16' font-family='sans-serif'%3E%E6%97%A0%E5%A3%B0%E6%97%A0%E8%AF%B4%3C/text%3E%3C/svg%3E");
+  background-repeat:repeat;
+}
+
+.canvas-container .layer-img.hidden{opacity:0;}
+/* Watermark overlay - covers entire page */
+.watermark-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:9998;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='120'%3E%3Ctext x='90' y='60' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 90 60)' fill='rgba(255,255,255,0.1)' font-size='16' font-family='sans-serif'%3E%E6%97%A0%E5%A3%B0%E6%97%A0%E8%AF%B4%3C/text%3E%3C/svg%3E");
+  background-repeat:repeat;
+}
+.export-status{
+  text-align:center;font-size:11px;color:var(--text2);margin-top:8px;min-height:18px;
+}
+canvas#exportCanvas{display:none;}
+
+/* Loading progress */
+.loading-bar-wrap{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;z-index:10000;pointer-events:none;
+  background:rgba(22,33,62,0.92);padding:20px 28px 16px;
+  border-radius:16px;border:1px solid rgba(255,255,255,0.08);
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+  min-width:240px;
+}
+.loading-bar-wrap .loading-text{
+  color:rgba(255,255,255,0.85);font-size:13px;font-weight:600;margin-bottom:10px;
+}
+.loading-bar-wrap .loading-track{
+  width:100%;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;
+}
+.loading-bar-wrap .loading-fill{
+  height:100%;background:linear-gradient(90deg,var(--accent),#ff6b6b);border-radius:3px;
+  transition:width 0.3s;width:0%;
+}
+.loading-bar-wrap.done{opacity:0;transition:opacity 0.5s;pointer-events:none;}
+
+/* ===== Preview Modal (WeChat export) ===== */
+.preview-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity 0.3s;
+  padding:20px;
+}
+.preview-overlay.show{opacity:1;pointer-events:auto;}
+.preview-overlay .preview-img{
+  max-width:92vw;max-height:60vh;border-radius:8px;
+  box-shadow:0 8px 40px rgba(0,0,0,0.6);object-fit:contain;
+}
+.preview-overlay .preview-hint{
+  color:#fff;font-size:15px;margin-top:18px;text-align:center;
+  background:rgba(233,69,96,0.85);padding:10px 24px;border-radius:24px;
+  font-weight:600;letter-spacing:0.5px;flex-shrink:0;
+}
+.preview-overlay .preview-close{
+  color:#fff;font-size:28px;margin-top:10px;cursor:pointer;flex-shrink:0;
+  width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;background:rgba(255,255,255,0.12);transition:background 0.2s;
+}
+.preview-overlay .preview-close:hover{background:rgba(255,255,255,0.25);}
+
+/* ===== Parts Panel ===== */
+.parts-panel{
+  flex:1;min-width:280px;max-width:360px;display:flex;flex-direction:column;gap:6px;
+  padding-bottom:40px;
+}
+.part-group{
+  background:var(--surface);border-radius:var(--radius);
+  border:1px solid rgba(255,255,255,0.05);overflow:hidden;
+  transition:all var(--transition);
+}
+.part-group.collapsed .part-body{display:none;}
+.part-group:not(.collapsed){border-color:var(--accent);}
+.part-header{
+  padding:9px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  user-select:none;font-size:13px;font-weight:600;transition:background 0.15s;
+}
+.part-header:hover{background:rgba(255,255,255,0.03);}
+.part-header .arrow{transition:transform 0.2s;font-size:10px;color:var(--text2);}
+.part-group:not(.collapsed) .part-header .arrow{transform:rotate(90deg);}
+.part-header .badge{
+  margin-left:auto;font-size:11px;background:var(--card);padding:2px 10px;
+  border-radius:20px;color:var(--text2);
+}
+.part-header .badge.has-selection{background:var(--accent);color:#fff;}
+.part-body{
+  padding:0 10px 10px;max-height:280px;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--card) transparent;
+}
+.part-body .items-row{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));
+  gap:7px;margin-bottom:8px;
+}
+/* Transform controls inside part body */
+.transform-ctls{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  padding:6px 0;border-top:1px solid rgba(255,255,255,0.06);margin-top:4px;
+}
+.transform-ctls label{font-size:10px;color:var(--text2);white-space:nowrap;}
+.transform-ctls input[type=range]{width:60px;accent-color:var(--accent);}
+.transform-ctls .tf-val{font-size:10px;color:var(--text2);min-width:32px;text-align:center;}
+.transform-ctls .btn-tiny{
+  font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.12);
+  background:transparent;color:var(--text2);cursor:pointer;
+}
+.transform-ctls .btn-tiny:hover{color:var(--accent);border-color:var(--accent);}
+/* Drag hint on canvas */
+.canvas-drag-hint{
+  position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  font-size:10px;color:rgba(255,255,255,0.5);background:rgba(0,0,0,0.6);
+  padding:3px 10px;border-radius:10px;pointer-events:none;opacity:0;transition:opacity 0.3s;
+}
+.canvas-drag-hint.visible{opacity:1;}
+.item-thumb{
+  aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;
+  border:2px solid transparent;background:var(--card);transition:all 0.15s;
+  position:relative;
+}
+.item-thumb:hover{border-color:rgba(255,255,255,0.2);transform:scale(1.04);}
+.item-thumb.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(233,69,96,0.3);}
+.item-thumb img{width:100%;height:100%;object-fit:contain;}
+.item-thumb .none-label{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--text2);font-size:18px;font-weight:300;
+}
+
+/* ===== Responsive ===== */
+@media(max-width:880px){
+  .main{flex-direction:column;align-items:center;padding:12px;gap:14px;}
+  .canvas-section{position:static;}
+  .canvas-container{width:min(420px,92vw);}
+  .parts-panel{width:100%;max-width:420px;}
+}
+@media(max-width:480px){
+  .header{padding:8px 12px;gap:6px;}
+  .header .title{font-size:13px;}
+  .btn{padding:6px 10px;font-size:11px;}
+  .canvas-container{width:92vw;}
+  .parts-panel{max-width:100%;}
+  .part-body .items-row{grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:5px;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="btn btn-outline" href="../">← 主页</a>
+  <span class="logo">✦ 捏捏Doll</span>
+  <span class="title"></span>
+  <span class="author"></span>
+  <span class="spacer"></span>
+  <div class="btn-group">
+    <button class="btn btn-outline" onclick="randomize()">🎲 随机</button>
+    <button class="btn btn-outline" onclick="resetAll()">↺ 重置</button>
+    <button class="btn btn-primary" id="btnExport" onclick="exportJPG()">📥 导出</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Canvas -->
+  <div class="canvas-section">
+    <div class="canvas-container" id="canvasContainer">
+      <div class="canvas-drag-hint" id="dragHint">↕ 拖动 · 双指缩放 · 滚轮缩放</div>
+      <div class="canvas-watermark"></div>
+    </div>
+    <div class="export-status" id="exportStatus"></div>
+    <canvas id="exportCanvas" width="2048" height="2048"></canvas>
+    <div class="loading-bar-wrap" id="loadingBar">
+      <div class="loading-text" id="loadingText">正在加载 0/86</div>
+      <div class="loading-track"><div class="loading-fill" id="loadingFill"></div></div>
+    </div>
+  </div>
+
+  <!-- Parts Panel -->
+  <div class="parts-panel" id="partsPanel"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Preview modal for WeChat export -->
+<div class="preview-overlay" id="previewOverlay" onclick="closePreview(event)">
+  <img class="preview-img" id="previewImg" src="" alt="导出预览" />
+  <div class="preview-hint">👆 长按图片保存到本地</div>
+  <div class="preview-close" onclick="closePreview(event)">✕</div>
+</div>
+
+<script>
+// ===== Panel display order (top to bottom in sidebar) =====
+const PANEL_ORDER = [
+  '背景','身体','头发','眉毛','眼睛','鼻子','鼻子装饰',
+  '腮红','嘴','衣服','手部配饰','配饰1','配饰2','配饰3','部位14'
+];
+
+// ===== Layer order (bottom to top = z-index low to high) =====
+const LAYER_ORDER = [
+  '背景','部位14','身体','头发','眉毛','眼睛',
+  '鼻子','腮红','嘴','衣服','鼻子装饰','手部配饰',
+  '配饰1','配饰2','配饰3'
+];
+
+// ===== Display name overrides =====
+const DISPLAY_NAMES = {};
+
+// ===== Parts that stay "none" by default / on reset =====
+const DEFAULT_NONE = ['部位14'];
+
+// ===== Parts that CAN randomize to "none" =====
+const CAN_RANDOM_NONE = ['配饰1','配饰2','配饰3','鼻子装饰'];
+
+// ===== Embedded image data =====
+const RAW_PARTS = [
+  {folder:'背景',optional:true,files:[
+    {id:'gHbTmTrXmyGlPWx7R06zZIdVJ5wssQHr',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/gHbTmTrXmyGlPWx7R06zZIdVJ5wssQHr.webp'},
+    {id:'7EMBFcCxDKbDm8YxYrwwEvH9lB9iRCFR',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/7EMBFcCxDKbDm8YxYrwwEvH9lB9iRCFR.webp'},
+    {id:'ty4qj1Mnc5NJ2PH3T2O6x',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/ty4qj1Mnc5NJ2PH3T2O6x.webp'},
+    {id:'WXLEldbbiM--FGE7QGZYe',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/WXLEldbbiM--FGE7QGZYe.webp'},
+    {id:'ILoaik_PI-vPzrK-hnTkF',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/ILoaik_PI-vPzrK-hnTkF.webp'},
+    {id:'Z9YZNaeYlYNm5Xn7EJill',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/背景/Z9YZNaeYlYNm5Xn7EJill.webp'}
+  ]},
+  {folder:'身体',optional:false,files:[
+    {id:'c24IdXyZOIrDr3dnFR0rz',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/身体/c24IdXyZOIrDr3dnFR0rz.webp'}
+  ]},
+  {folder:'头发',optional:true,files:[
+    {id:'bNMFJo1A2wTNF0cZoEdF5',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/头发/bNMFJo1A2wTNF0cZoEdF5.webp'},
+    {id:'d1j-fZvY0zSBdd8gEbSL-',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/头发/d1j-fZvY0zSBdd8gEbSL-.webp'},
+    {id:'q-D6vpjkr3hiDdeDmaKNh',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/头发/q-D6vpjkr3hiDdeDmaKNh.webp'},
+    {id:'fmriavIymgY4igqzAuh9r',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/头发/fmriavIymgY4igqzAuh9r.webp'}
+  ]},
+  {folder:'眉毛',optional:true,files:[
+    {id:'tXbz-g2uzP-ZzMoAfZoGa',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/tXbz-g2uzP-ZzMoAfZoGa.webp'},
+    {id:'4oWgttuESbOhX2wOt7HP_',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/4oWgttuESbOhX2wOt7HP_.webp'},
+    {id:'iUP5Tr-dWlyHc9nMiO_fw',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/iUP5Tr-dWlyHc9nMiO_fw.webp'},
+    {id:'QNxn4FmSVEFklokZ762Ui',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/QNxn4FmSVEFklokZ762Ui.webp'},
+    {id:'j8FgEg1umDQn65i0omR1H',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/j8FgEg1umDQn65i0omR1H.webp'},
+    {id:'0HI5yGKid0_shfKSttN3v',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/0HI5yGKid0_shfKSttN3v.webp'},
+    {id:'2XZAvY00IgmzkzSzhVbTE',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/2XZAvY00IgmzkzSzhVbTE.webp'},
+    {id:'73O8IAj9fjoIzy8SBbgqL',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眉毛/73O8IAj9fjoIzy8SBbgqL.webp'}
+  ]},
+  {folder:'眼睛',optional:true,files:[
+    {id:'v4KWm5Pt9UIaO5faCb7NK',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/v4KWm5Pt9UIaO5faCb7NK.webp'},
+    {id:'9P5GRbFNS0gzdYQXdRwhO',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/9P5GRbFNS0gzdYQXdRwhO.webp'},
+    {id:'PSN0zVILqfX6PePGMbaU3',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/PSN0zVILqfX6PePGMbaU3.webp'},
+    {id:'4G_KLOP9CSZq-u5x1r3Lc',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/4G_KLOP9CSZq-u5x1r3Lc.webp'},
+    {id:'xBL_BeXQ2xzTlpSyIeC8O',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/xBL_BeXQ2xzTlpSyIeC8O.webp'},
+    {id:'6fMP4cDsKAgNTOOWXsv3j',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/6fMP4cDsKAgNTOOWXsv3j.webp'},
+    {id:'og4Szx8ghE1R2AkRgcshM',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/og4Szx8ghE1R2AkRgcshM.webp'},
+    {id:'X8I52f-P2fdjB9slK-J2f',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/眼睛/X8I52f-P2fdjB9slK-J2f.webp'}
+  ]},
+  {folder:'鼻子',optional:true,files:[
+    {id:'JgQf10da7KeF7HeBoiLg9',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/鼻子/JgQf10da7KeF7HeBoiLg9.webp'}
+  ]},
+  {folder:'鼻子装饰',optional:true,files:[
+    {id:'aoSZkBPg3-H9lUFbVE6vt',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/鼻子装饰/aoSZkBPg3-H9lUFbVE6vt.webp'},
+    {id:'Si7xJIOqypXcGUZms8Myd',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/鼻子装饰/Si7xJIOqypXcGUZms8Myd.webp'},
+    {id:'CND-9O_3VnmkMYKrayleG',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/鼻子装饰/CND-9O_3VnmkMYKrayleG.webp'},
+    {id:'7rlJekMHszFt2XVh-WKD2',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/鼻子装饰/7rlJekMHszFt2XVh-WKD2.webp'}
+  ]},
+  {folder:'腮红',optional:true,files:[
+    {id:'nFG2MCNrhLwCoWAIYQGO4',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/腮红/nFG2MCNrhLwCoWAIYQGO4.webp'},
+    {id:'WNxSEfOzlyt9een_0GmXQ',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/腮红/WNxSEfOzlyt9een_0GmXQ.webp'},
+    {id:'c1QjzeOCDNhIPvN9cDam-',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/腮红/c1QjzeOCDNhIPvN9cDam-.webp'},
+    {id:'t8mlStzwt5V1fqr1rAC9O',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/腮红/t8mlStzwt5V1fqr1rAC9O.webp'}
+  ]},
+  {folder:'嘴',optional:true,files:[
+    {id:'fRalkAVCjUc9jWmB_unmx',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/fRalkAVCjUc9jWmB_unmx.webp'},
+    {id:'tCcmmknzUA0kvWpJlNC4y',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/tCcmmknzUA0kvWpJlNC4y.webp'},
+    {id:'oNt7xyqTWVR1boJ_o9H9T',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/oNt7xyqTWVR1boJ_o9H9T.webp'},
+    {id:'T-RlembM5qvaxyxrE3gON',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/T-RlembM5qvaxyxrE3gON.webp'},
+    {id:'3mQFaCanu5n9yoO-BmVKx',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/3mQFaCanu5n9yoO-BmVKx.webp'},
+    {id:'I5xsd--ZTqYeXdzn9uSau',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/I5xsd--ZTqYeXdzn9uSau.webp'},
+    {id:'FIUvwMB_di-MRf1eTK5jL',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/FIUvwMB_di-MRf1eTK5jL.webp'},
+    {id:'XwJXygvnZkmBAtgYKBRTG',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/嘴/XwJXygvnZkmBAtgYKBRTG.webp'}
+  ]},
+  {folder:'衣服',optional:true,files:[
+    {id:'uqYh4cs2XMGVXJJ7Ek8Qj',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/uqYh4cs2XMGVXJJ7Ek8Qj.webp'},
+    {id:'zMz3GeIn97kh55duXcXvB',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/zMz3GeIn97kh55duXcXvB.webp'},
+    {id:'vpSANJMtcLePBW4h1yNHq',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/vpSANJMtcLePBW4h1yNHq.webp'},
+    {id:'5qs_X-zBGO3lAitDSNa-A',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/5qs_X-zBGO3lAitDSNa-A.webp'},
+    {id:'xv4O4XtWZCnyDPz-2U5YE',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/xv4O4XtWZCnyDPz-2U5YE.webp'},
+    {id:'mzGy_gqs_6irqtlkUG5PS',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/mzGy_gqs_6irqtlkUG5PS.webp'},
+    {id:'TcXrYNDKKLxRDuUTQlYt2',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/衣服/TcXrYNDKKLxRDuUTQlYt2.webp'}
+  ]},
+  {folder:'手部配饰',optional:true,files:[
+    {id:'VFnOmy_FDO6zaNCavFrFQ',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/手部配饰/VFnOmy_FDO6zaNCavFrFQ.webp'},
+    {id:'8EB0hmum6zc-MsrW-jHEz',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/手部配饰/8EB0hmum6zc-MsrW-jHEz.webp'},
+    {id:'Io6V2vbIO2oGGqwj-PBFP',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/手部配饰/Io6V2vbIO2oGGqwj-PBFP.webp'},
+    {id:'h5tNwn6CClqbMpd5F_d9i',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/手部配饰/h5tNwn6CClqbMpd5F_d9i.webp'},
+    {id:'zNIFt2398gSgWvNhCftUO',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/手部配饰/zNIFt2398gSgWvNhCftUO.webp'}
+  ]},
+  {folder:'配饰1',optional:true,files:[
+    {id:'X1U_6t4oRvRxULmFGKYBn',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/X1U_6t4oRvRxULmFGKYBn.webp'},
+    {id:'dj7wgXqfrz5Pb11lABcCZ',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/dj7wgXqfrz5Pb11lABcCZ.webp'},
+    {id:'TnYseqipGCNcFJ__G6gvX',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/TnYseqipGCNcFJ__G6gvX.webp'},
+    {id:'fccIOpohwEbtLQ2zxKYXo',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/fccIOpohwEbtLQ2zxKYXo.webp'},
+    {id:'hldg50m_XtDCfm_ZhEVao',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/hldg50m_XtDCfm_ZhEVao.webp'},
+    {id:'wHW2zhHM8b4r15yKdO7KM',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/wHW2zhHM8b4r15yKdO7KM.webp'},
+    {id:'qzy1mnQHN9rW2bAag29Fi',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/qzy1mnQHN9rW2bAag29Fi.webp'},
+    {id:'taGF3d8UdwORbfcfM7SNZ',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/taGF3d8UdwORbfcfM7SNZ.webp'},
+    {id:'PnIXvlzETLraOuaZGA9gy',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/PnIXvlzETLraOuaZGA9gy.webp'},
+    {id:'nLRzspGSiXVnhSL5n8_HX',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰1/nLRzspGSiXVnhSL5n8_HX.webp'}
+  ]},
+  {folder:'配饰2',optional:true,files:[
+    {id:'nQrenCpsFXWcA8j8ICkjd',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/nQrenCpsFXWcA8j8ICkjd.webp'},
+    {id:'agaZsYUZr8LpXdcNwvgXq',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/agaZsYUZr8LpXdcNwvgXq.webp'},
+    {id:'sh6EN1HbsytCX5ypkV2km',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/sh6EN1HbsytCX5ypkV2km.webp'},
+    {id:'iZyDdx1C-DLWSXENEho5x',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/iZyDdx1C-DLWSXENEho5x.webp'},
+    {id:'MfXkVSVm-afTZnsr4tAYh',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/MfXkVSVm-afTZnsr4tAYh.webp'},
+    {id:'P2yraODLV5RbqH8Qr9O_J',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/P2yraODLV5RbqH8Qr9O_J.webp'},
+    {id:'xZ7haITwy_yL2vH6hvbiT',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/xZ7haITwy_yL2vH6hvbiT.webp'},
+    {id:'ptBQ5_2NHlALxTr6nuY0f',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/ptBQ5_2NHlALxTr6nuY0f.webp'},
+    {id:'rMdonECPek7OT9CojQ7to',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰2/rMdonECPek7OT9CojQ7to.webp'}
+  ]},
+  {folder:'配饰3',optional:true,files:[
+    {id:'luD-OClIzrtyroryA5WTb',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/luD-OClIzrtyroryA5WTb.webp'},
+    {id:'rfAOLoCt0Z98DKmP7n9U3',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/rfAOLoCt0Z98DKmP7n9U3.webp'},
+    {id:'v76AUMplCC8pLSk3sOuNl',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/v76AUMplCC8pLSk3sOuNl.webp'},
+    {id:'C9PlmQFIajKaDQxmKiIU3',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/C9PlmQFIajKaDQxmKiIU3.webp'},
+    {id:'xoMGftZGrdp4C3k5MXZSf',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/xoMGftZGrdp4C3k5MXZSf.webp'},
+    {id:'rqcZdU8EslhSjSiIzRj78',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/rqcZdU8EslhSjSiIzRj78.webp'},
+    {id:'MBnfp3oGqYnAm7n1W1h2z',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/MBnfp3oGqYnAm7n1W1h2z.webp'},
+    {id:'uxRrX357Vtd_WYY7OtLeP',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/uxRrX357Vtd_WYY7OtLeP.webp'},
+    {id:'r3r4mG42bozDV1EvN2JJT',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/配饰3/r3r4mG42bozDV1EvN2JJT.webp'}
+  ]},
+  {folder:'部位14',optional:true,files:[
+    {id:'OkQuwO5xKkcXfvfNh6ZbjO6IlxHafzMn',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/部位14/OkQuwO5xKkcXfvfNh6ZbjO6IlxHafzMn.webp'},
+    {id:'EfvGRheQFgO7U87vZsxxG',path:'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/res/部位14/EfvGRheQFgO7U87vZsxxG.webp'}
+  ]}
+];
+
+// ===== Build ordered parts with display names =====
+const partMap = {};
+RAW_PARTS.forEach(p => { partMap[p.folder] = p; });
+
+// Build layer index map
+const layerIndexMap = {};
+LAYER_ORDER.forEach((name, i) => { layerIndexMap[name] = i; });
+
+// Build parts in PANEL_ORDER for display
+const parts = PANEL_ORDER.map(name => {
+  const data = partMap[name];
+  if (!data) return null;
+  return {
+    name: name,
+    displayName: DISPLAY_NAMES[name] || name,
+    optional: data.optional,
+    items: data.files,
+    layerIndex: layerIndexMap[name] !== undefined ? layerIndexMap[name] : 999
+  };
+}).filter(Boolean);
+
+// ===== State =====
+const state = {};       // part.name -> selectedIndex (-1 = none)
+const layerEls = {};    // part.name -> [img elements]
+
+// Init state: first item selected, except DEFAULT_NONE
+parts.forEach((part, pi) => {
+  state[part.name] = DEFAULT_NONE.includes(part.name) ? -1 : (part.items.length > 0 ? 0 : -1);
+});
+
+let expandedPart = null; // currently expanded part name (accordion)
+
+// ===== Transform state per part =====
+const transforms = {}; // partName -> {dx, dy, scale, rotation}
+parts.forEach(p => { transforms[p.name] = {dx:0, dy:0, scale:1, rotation:0}; });
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+
+// ===== Build canvas layers (sorted by z-index = layer order) =====
+const canvasContainer = document.getElementById('canvasContainer');
+const totalImgs = parts.reduce((s, p) => s + p.items.length, 0);
+let loadedImgs = 0;
+
+function updateLoadingBar() {
+  const pct = Math.round(loadedImgs / totalImgs * 100);
+  document.getElementById('loadingText').textContent = '正在加载 ' + loadedImgs + '/' + totalImgs;
+  document.getElementById('loadingFill').style.width = pct + '%';
+  if (loadedImgs >= totalImgs) {
+    setTimeout(() => {
+      document.getElementById('loadingBar').classList.add('done');
+    }, 400);
+  }
+}
+
+parts.forEach((part) => {
+  layerEls[part.name] = [];
+  part.items.forEach((item, ii) => {
+    const img = document.createElement('img');
+    img.className = 'layer-img hidden';
+    img.src = item.path;
+    img.style.zIndex = part.layerIndex;
+    img.onload = img.onerror = () => {
+      loadedImgs++;
+      updateLoadingBar();
+      if (state[part.name] === ii) img.classList.remove('hidden');
+    };
+    canvasContainer.appendChild(img);
+    layerEls[part.name][ii] = img;
+  });
+});
+
+// ===== Drag & Pinch interaction on canvas =====
+let dragPart = null, dragStartX = 0, dragStartY = 0, dragOrigDx = 0, dragOrigDy = 0;
+let pinchPart = null, pinchStartDist = 0, pinchOrigScale = 1;
+
+function getDist(t1, t2) {
+  var dx = t1.clientX - t2.clientX;
+  var dy = t1.clientY - t2.clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+canvasContainer.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+canvasContainer.addEventListener('touchstart', e => {
+  if (e.touches.length === 1) {
+    e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY);
+  } else if (e.touches.length === 2) {
+    e.preventDefault();
+    if (!expandedPart) return;
+    if (state[expandedPart] < 0) return;
+    pinchPart = expandedPart;
+    pinchStartDist = getDist(e.touches[0], e.touches[1]);
+    pinchOrigScale = transforms[pinchPart].scale;
+    dragPart = null;
+  }
+}, {passive:false});
+
+function startDrag(cx, cy) {
+  if (!expandedPart) return;
+  if (state[expandedPart] < 0) return;
+  dragPart = expandedPart;
+  dragStartX = cx; dragStartY = cy;
+  dragOrigDx = transforms[dragPart].dx;
+  dragOrigDy = transforms[dragPart].dy;
+  pinchPart = null;
+  document.getElementById('dragHint').classList.add('visible');
+}
+
+window.addEventListener('mousemove', e => doDrag(e.clientX, e.clientY));
+window.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && pinchPart) {
+    e.preventDefault();
+    var newDist = getDist(e.touches[0], e.touches[1]);
+    var ratio = newDist / pinchStartDist;
+    var s = clamp(pinchOrigScale * ratio, 0.3, 2.5);
+    transforms[pinchPart].scale = s;
+    applyTransformCSS(pinchPart);
+    updateTransformSliders(pinchPart);
+  } else if (e.touches.length === 1 && dragPart) {
+    e.preventDefault();
+    doDrag(e.touches[0].clientX, e.touches[0].clientY);
+  }
+}, {passive:false});
+
+function doDrag(cx, cy) {
+  if (!dragPart) return;
+  var tf = transforms[dragPart];
+  tf.dx = dragOrigDx + (cx - dragStartX);
+  tf.dy = dragOrigDy + (cy - dragStartY);
+  applyTransformCSS(dragPart);
+}
+
+window.addEventListener('mouseup', endDrag);
+window.addEventListener('touchend', endDrag);
+function endDrag() {
+  if (dragPart) document.getElementById('dragHint').classList.remove('visible');
+  dragPart = null;
+  pinchPart = null;
+}
+
+// Zoom with scroll wheel on canvas
+canvasContainer.addEventListener('wheel', e => {
+  if (!expandedPart) return;
+  const selIdx = state[expandedPart];
+  if (selIdx < 0) return;
+  e.preventDefault();
+  const tf = transforms[expandedPart];
+  const delta = e.deltaY > 0 ? -0.05 : 0.05;
+  tf.scale = clamp(tf.scale + delta, 0.3, 2.5);
+  applyTransformCSS(expandedPart);
+  updateTransformSliders(expandedPart);
+}, {passive:false});
+
+// Apply CSS transform to currently visible layer of a part
+function applyTransformCSS(partName) {
+  const selIdx = state[partName];
+  if (selIdx < 0) return;
+  const el = layerEls[partName][selIdx];
+  if (!el) return;
+  const tf = transforms[partName];
+  el.style.transform = 'translate(' + tf.dx + 'px,' + tf.dy + 'px) scale(' + tf.scale + ') rotate(' + tf.rotation + 'deg)';
+}
+
+// ===== Build parts panel =====
+const partsPanel = document.getElementById('partsPanel');
+
+parts.forEach((part) => {
+  const group = document.createElement('div');
+  group.className = 'part-group collapsed';
+  group.dataset.partName = part.name;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'part-header';
+  const sel = state[part.name];
+  const badgeText = sel >= 0 ? (sel + 1) + '/' + part.items.length : '无';
+  header.innerHTML = '<span class="arrow">▶</span><span>' + part.displayName + '</span><span class="badge' + (sel >= 0 ? ' has-selection' : '') + '">' + badgeText + '</span>';
+  header.onclick = () => togglePart(part.name);
+  group.appendChild(header);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'part-body';
+  const itemsRow = document.createElement('div');
+  itemsRow.className = 'items-row';
+
+  // "None" option for optional parts
+  if (part.optional) {
+    const noneThumb = document.createElement('div');
+    noneThumb.className = 'item-thumb' + (sel === -1 ? ' selected' : '');
+    noneThumb.innerHTML = '<div class="none-label">✕</div>';
+    noneThumb.onclick = (e) => { e.stopPropagation(); selectItem(part.name, -1); };
+    itemsRow.appendChild(noneThumb);
+  }
+
+  part.items.forEach((item, ii) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'item-thumb' + (sel === ii ? ' selected' : '');
+    const thumbImg = document.createElement('img');
+    thumbImg.src = item.path;
+    thumb.appendChild(thumbImg);
+    thumb.onclick = (e) => { e.stopPropagation(); selectItem(part.name, ii); };
+    itemsRow.appendChild(thumb);
+  });
+
+  body.appendChild(itemsRow);
+
+  // Transform controls
+  const tfCtl = document.createElement('div');
+  tfCtl.className = 'transform-ctls';
+  tfCtl.innerHTML = '<button class="btn-tiny" onclick="resetTransform(\'' + part.name + '\')">↺</button>' +
+    '<label>缩放</label><input type="range" min="30" max="250" value="100" oninput="setTransform(\'' + part.name + '\',\'scale\',this.value/100)"><span class="tf-val tf-scale">1.0</span>' +
+    '<label>旋转</label><input type="range" min="-180" max="180" value="0" oninput="setTransform(\'' + part.name + '\',\'rotation\',parseInt(this.value))"><span class="tf-val tf-rot">0°</span>';
+  tfCtl.dataset.partName = part.name;
+  body.appendChild(tfCtl);
+
+  group.appendChild(body);
+  partsPanel.appendChild(group);
+});
+
+// ===== Accordion toggle (auto-collapse others only, no hiding) =====
+function togglePart(partName) {
+  if (expandedPart === partName) {
+    // Collapse current → all show as collapsed headers
+    expandedPart = null;
+    partsPanel.querySelectorAll('.part-group').forEach(g => g.classList.add('collapsed'));
+  } else {
+    // Collapse previous, expand this one
+    expandedPart = partName;
+    partsPanel.querySelectorAll('.part-group').forEach(g => {
+      g.classList.toggle('collapsed', g.dataset.partName !== partName);
+    });
+    const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+    if (group) group.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// ===== Select item =====
+function selectItem(partName, ii) {
+  state[partName] = ii;
+
+  // Update canvas
+  const els = layerEls[partName];
+  if (els) {
+    els.forEach((img, idx) => {
+      img.classList.toggle('hidden', idx !== ii);
+      // Clear old transforms on hidden layers
+      if (idx !== ii) img.style.transform = '';
+    });
+    // Apply transform to newly selected layer
+    if (ii >= 0 && els[ii]) {
+      applyTransformCSS(partName);
+    }
+  }
+
+  // Update panel UI
+  refreshPartUI(partName);
+  updateTransformSliders(partName);
+}
+
+// ===== Refresh part UI =====
+function refreshPartUI(partName) {
+  const part = parts.find(p => p.name === partName);
+  if (!part) return;
+  const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+  if (!group) return;
+
+  const sel = state[partName];
+  const badge = group.querySelector('.badge');
+  badge.textContent = sel >= 0 ? (sel + 1) + '/' + part.items.length : '无';
+  badge.classList.toggle('has-selection', sel >= 0);
+
+  const thumbs = group.querySelectorAll('.item-thumb');
+  thumbs.forEach((t, idx) => {
+    if (part.optional) {
+      t.classList.toggle('selected', idx === 0 ? sel === -1 : (idx - 1) === sel);
+    } else {
+      t.classList.toggle('selected', idx === sel);
+    }
+  });
+}
+
+// ===== Reset all =====
+function resetAll() {
+  parts.forEach(part => {
+    const newVal = DEFAULT_NONE.includes(part.name) ? -1 : (part.items.length > 0 ? 0 : -1);
+    state[part.name] = newVal;
+    // Reset transform
+    transforms[part.name] = {dx:0, dy:0, scale:1, rotation:0};
+    const els = layerEls[part.name];
+    if (els) {
+      els.forEach((img, idx) => {
+        img.classList.toggle('hidden', idx !== newVal);
+        img.style.transform = '';
+      });
+      if (newVal >= 0 && els[newVal]) applyTransformCSS(part.name);
+    }
+    refreshPartUI(part.name);
+    updateTransformSliders(part.name);
+  });
+  showToast('↺ 已重置');
+}
+
+// ===== Randomize =====
+function randomize() {
+  parts.forEach(part => {
+    let newVal;
+    if (DEFAULT_NONE.includes(part.name)) {
+      // 部位14 always stays "none"
+      newVal = -1;
+    } else if (CAN_RANDOM_NONE.includes(part.name)) {
+      // 配饰1/2/3, 鼻子装饰: 50% chance of "none"
+      newVal = Math.random() < 0.4 ? -1 : Math.floor(Math.random() * part.items.length);
+    } else if (part.optional) {
+      // Other optional parts: always pick an item (never "none")
+      newVal = Math.floor(Math.random() * part.items.length);
+    } else {
+      // Required parts: always pick an item
+      newVal = Math.floor(Math.random() * part.items.length);
+    }
+    state[part.name] = newVal;
+    const els = layerEls[part.name];
+    if (els) els.forEach((img, idx) => img.classList.toggle('hidden', idx !== newVal));
+    refreshPartUI(part.name);
+  });
+  showToast('🎲 随机搭配完成');
+}
+
+// ===== Export JPG (fetch+blobURL+Image avoids tainted canvas in file://) =====
+async function exportJPG() {
+  const statusEl = document.getElementById('exportStatus');
+  const btnExport = document.getElementById('btnExport');
+  btnExport.disabled = true;
+  statusEl.textContent = '⏳ 正在合成...';
+
+  const exportCanvas = document.getElementById('exportCanvas');
+  const ctx = exportCanvas.getContext('2d');
+  ctx.clearRect(0, 0, 2048, 2048);
+
+  try {
+    // Collect layers with their transforms (bottom to top = LAYER_ORDER)
+    const layers = [];
+    for (const name of LAYER_ORDER) {
+      const selIdx = state[name];
+      if (selIdx < 0) continue;
+      const part = parts.find(p => p.name === name);
+      if (!part) continue;
+      layers.push({path: part.items[selIdx].path, name: name});
+    }
+
+    // Draw each layer with its transform applied
+    const R = 2048 / 600; // scale factor from display px to canvas px
+    for (const layer of layers) {
+      const img = await loadCleanImage(layer.path);
+      const tf = transforms[layer.name];
+      ctx.save();
+      // Translate to center, apply scale/rotation, translate back + offset
+      ctx.translate(2048/2, 2048/2);
+      ctx.rotate(tf.rotation * Math.PI / 180);
+      ctx.scale(tf.scale, tf.scale);
+      ctx.translate(-2048/2 + tf.dx * R, -2048/2 + tf.dy * R);
+      ctx.drawImage(img, 0, 0, 2048, 2048);
+      ctx.restore();
+    }
+
+    // Draw watermark on export canvas
+    drawWatermark(ctx);
+
+    // Canvas is clean → export
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+
+    if (isWeChat) {
+      // WeChat: show in-page preview modal for long-press save
+      const dataUrl = exportCanvas.toDataURL('image/jpeg', 0.92);
+      document.getElementById('previewImg').src = dataUrl;
+      document.getElementById('previewOverlay').classList.add('show');
+      statusEl.textContent = '✅ 已生成，长按图片保存';
+      btnExport.disabled = false;
+    } else {
+      // Normal browser: trigger download
+      exportCanvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = '奇迹小树_' + Date.now() + '.webp';
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          statusEl.textContent = '✅ 导出成功！';
+        } else {
+          statusEl.textContent = '❌ 导出失败，请重试';
+        }
+        btnExport.disabled = false;
+      }, 'image/jpeg', 0.92);
+    }
+  } catch (err) {
+    statusEl.textContent = '❌ 导出失败: ' + err.message;
+    btnExport.disabled = false;
+  }
+}
+
+// Draw repeating watermark on canvas
+function drawWatermark(ctx) {
+  ctx.save();
+  ctx.font = '28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var text = '无声无说';
+  var spacing = 260;
+  for (var y = -100; y < 2200; y += spacing) {
+    for (var x = -100; x < 2200; x += spacing) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-45 * Math.PI / 180);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// Load image via XHR+blob URL to avoid tainted canvas (fetch blocked in file://)
+function loadCleanImage(src) {
+  return new Promise((resolve, reject) => {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', src, true);
+    xhr.responseType = 'blob';
+    xhr.onload = function() {
+      // file:// returns status 0 on success
+      if (xhr.status === 200 || xhr.status === 0) {
+        var objectUrl = URL.createObjectURL(xhr.response);
+        var img = new Image();
+        img.onload = function() { resolve(img); };
+        img.onerror = function() { reject(new Error('图片解码失败')); };
+        img.src = objectUrl;
+      } else {
+        reject(new Error('XHR status ' + xhr.status));
+      }
+    };
+    xhr.onerror = function() { reject(new Error('XHR 请求失败')); };
+    xhr.send();
+  });
+}
+
+// ===== Toast =====
+let toastTimer;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ===== Close preview modal =====
+function closePreview(e) {
+  if (e && e.target !== e.currentTarget) return; // only close on overlay click, not img
+  document.getElementById('previewOverlay').classList.remove('show');
+}
+
+// ===== Transform helpers =====
+function setTransform(partName, key, value) {
+  transforms[partName][key] = value;
+  applyTransformCSS(partName);
+  updateTransformSliders(partName);
+}
+
+function resetTransform(partName) {
+  transforms[partName] = {dx:0, dy:0, scale:1, rotation:0};
+  applyTransformCSS(partName);
+  updateTransformSliders(partName);
+}
+
+function updateTransformSliders(partName) {
+  const group = partsPanel.querySelector('[data-part-name="' + partName + '"]');
+  if (!group) return;
+  const tf = transforms[partName];
+  const scaleSlider = group.querySelector('input[type=range]:nth-of-type(1)');
+  const rotSlider = group.querySelector('input[type=range]:nth-of-type(2)');
+  const scaleVal = group.querySelector('.tf-scale');
+  const rotVal = group.querySelector('.tf-rot');
+  if (scaleSlider) scaleSlider.value = Math.round(tf.scale * 100);
+  if (rotSlider) rotSlider.value = Math.round(tf.rotation);
+  if (scaleVal) scaleVal.textContent = tf.scale.toFixed(2);
+  if (rotVal) rotVal.textContent = Math.round(tf.rotation) + '\u00B0';
+}
+
+// ===== Init: expand the first part (背景) =====
+if (parts.length > 0) {
+  togglePart(parts[0].name);
+}
+</script>
+<div class="watermark-overlay"></div>
+</body>
+</html>
