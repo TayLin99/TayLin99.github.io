@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preload" as="image" href="https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/dog/%E5%A4%A7%E7%8B%97%E4%B8%A5%E8%82%83.jpg">
+<link rel="preload" as="image" href="https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/dog/%E5%A4%A7%E7%8B%97%E5%8F%AB.jpg">
+<link rel="preload" as="image" href="https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/dog/%E5%A4%A7%E7%8B%97%E6%91%B8%E5%A4%B4.jpg">
 <title>大狗叫叫叫</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
@@ -175,7 +178,7 @@
   <div id="stage">
     <div id="hitZone">
       <div id="vWrap">
-        <img id="dog" src="大狗笑.jpg" alt="大狗" draggable="false">
+        <img id="dog" src="https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/dog/%E5%A4%A7%E7%8B%97%E7%AC%91.jpg" alt="大狗" draggable="false" fetchpriority="high" decoding="async">
       </div>
     </div>
   </div>
@@ -185,7 +188,7 @@
     <span>⇄ 左右晃 = 摸头</span>
     <span>⇅ 上下晃 = 摸头</span>
   </div>
-  <div id="foot">BGM 已使用真实音频；音效「大狗」「叫」暂用文字转语音占位，把文件放到 dog/sfx/大狗.m4a 与 dog/sfx/叫.m4a 即可替换</div>
+  <div id="foot">BGM / 音效已用真实音频 · 资源经 jsDelivr CDN 加速加载</div>
 
   <div id="overlay">
     <div class="card">
@@ -199,9 +202,12 @@
 <script>
 'use strict';
 /* =====================================================================
- * 配置区：以后拿到真实 BGM / 音效素材，往这里填 url 即可（相对路径或链接）
- * 音效不填 url 时用浏览器文字转语音念「大狗」「叫」；不支持语音时回退到程序合成。
+ * 配置区：BGM / 音效素材路径（相对 dog/ 目录）。资源经 jsDelivr CDN 加速，
+ * CDN 失败时自动回退到本地文件；音效缺失时回退到浏览器程序合成。
  * ===================================================================== */
+const CDN_BASE = 'https://cdn.jsdelivr.net/gh/TayLin99/TayLin99.github.io@main/dog';
+function cdn(rel){ return CDN_BASE + '/' + rel.split('/').map(encodeURIComponent).join('/'); }
+
 const TRACKS = [
   {name:'欸？大狗！',           link:'https://b23.tv/Eh56pbP', url:'bgm/欸？大狗！.m4a', bpm:122, bars:8,  root:60, scale:[0,2,4,5,7,9,11,12], seed:1, feel:'bounce'},
   {name:'我的悲伤是狗叫的',     link:'https://b23.tv/fYywQYs', url:'bgm/我的悲伤是狗叫的.m4a', bpm:80,  bars:8,  root:57, scale:[0,2,3,5,7,8,10,12], seed:2, feel:'sad'},
@@ -209,10 +215,9 @@ const TRACKS = [
   {name:'🐶 叫 香 🐶',          link:'https://b23.tv/9vIHLdV', url:'bgm/🐶叫香🐶.m4a', bpm:110, bars:8,  root:60, scale:[0,2,4,7,9,12,14],    seed:4, feel:'goofy'},
   {name:'疯一样的大狗',         link:'https://b23.tv/zbouIAM', url:'bgm/疯一样的大狗.m4a', bpm:140, bars:16, root:55, scale:[0,2,4,7,9,12],       seed:5, feel:'energy'},
 ];
-/* 音效占位（后续换成真实文件路径即可，如 './sfx/dagou.wav'）；未填时用浏览器文字转语音念「大狗」「叫」 */
-const SFX_DOG_URL  = 'sfx/大狗.m4a';  // 音效1：大狗（把真实文件放到 dog/sfx/大狗.m4a 即可替换）
-const SFX_BARK_URL = 'sfx/叫.m4a';    // 音效2：叫（把真实文件放到 dog/sfx/叫.m4a 即可替换）
-const USE_TTS = typeof window!=='undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+/* 音效路径（相对 dog/ 目录） */
+const SFX_DOG_URL  = 'sfx/大狗.m4a';  // 音效1：大狗
+const SFX_BARK_URL = 'sfx/叫.m4a';    // 音效2：叫
 
 /* ---------- 交互参数 ---------- */
 const START_RATE = 0.5;        // 长按起始音调：-1 八度（即 0.5x）
@@ -237,8 +242,10 @@ const nowLink  = document.getElementById('nowLink');
 const skipBtn  = document.getElementById('skipBtn');
 
 const IMG = { serious:'大狗严肃.jpg', smile:'大狗笑.jpg', pet:'大狗摸头.jpg', bark:'大狗叫.jpg' };
-/* 预加载 4 张图，避免切换时闪烁 */
-Object.values(IMG).forEach(src=>{ const im=new Image(); im.src=src; });
+const cdnBroken = new Set();
+function imgSrc(key){ const rel=IMG[key]; return cdnBroken.has(rel) ? rel : cdn(rel); }
+/* 预加载 4 张图（走 CDN），避免切换时闪烁 */
+Object.values(IMG).forEach(rel=>{ const im=new Image(); im.src=cdn(rel); });
 
 /* ---------- 全局状态 ---------- */
 let actx=null, started=false;
@@ -250,7 +257,7 @@ let mouseInside=false, lastX=0, lastY=0, wasOverDog=false;
 let hCur=0,vCur=0,hRight=false,hLeft=false,vUp=false,vDown=false;
 let hAnimUntil=0,vAnimUntil=0;
 let touchId=null, tStartX=0, tStartY=0, tLastX=0, tLastY=0, tMoved=false, holdTimer=null;
-let ttsVoice=null, dogUtter=null, breatheTimer=null, breatheAnim=null;
+let breatheTimer=null, breatheAnim=null;
 
 const bgmAudio = new Audio();
 bgmAudio.volume = BGM_VOLUME;
@@ -331,43 +338,6 @@ function renderHowl(sr){
   return B;
 }
 
-/* ---------- 文字转语音（占位音效：「大狗」「叫」） ---------- */
-function getTTSVoice(){
-  if(ttsVoice) return ttsVoice;
-  const vs=window.speechSynthesis.getVoices();
-  ttsVoice=vs.find(v=>v.lang&&v.lang.toLowerCase().startsWith('zh')) ||
-           vs.find(v=>v.lang&&v.lang.toLowerCase().startsWith('cmn')) || null;
-  return ttsVoice;
-}
-if(USE_TTS) window.speechSynthesis.onvoiceschanged=()=>{ ttsVoice=null; getTTSVoice(); };
-
-/* 长按：循环念「大狗」，音调/语速随 rate 上升 */
-function speakDogWord(){
-  if(!holding) return;
-  const u=new SpeechSynthesisUtterance('大狗');
-  u.lang='zh-CN';
-  if(getTTSVoice()) u.voice=getTTSVoice();
-  u.pitch=Math.min(2, Math.max(0.1, rate));
-  u.rate=Math.min(2, Math.max(0.5, rate*0.85));
-  dogUtter=u;
-  u.onend=()=>{ dogUtter=null; if(holding) speakDogWord(); };
-  u.onerror=()=>{ dogUtter=null; };
-  window.speechSynthesis.speak(u);
-}
-
-/* 松手：念一串「叫」填满按住时长 */
-function speakBark(durSec){
-  const n=Math.max(2, Math.round(durSec*2.5));
-  const u=new SpeechSynthesisUtterance('叫'.repeat(n));
-  u.lang='zh-CN';
-  if(getTTSVoice()) u.voice=getTTSVoice();
-  u.pitch=Math.min(2, Math.max(0.5, rate));
-  u.rate=1;
-  u.onend=finishBark;
-  u.onerror=finishBark;
-  window.speechSynthesis.speak(u);
-}
-
 /* ---------- 长按呼吸（跟「音效-大狗」速度同步） ---------- */
 function startBreathing(){
   stopBreathing();
@@ -419,6 +389,19 @@ function bufferFromSamples(actx,samples){
   const buf=actx.createBuffer(1,samples.length,actx.sampleRate);
   buf.getChannelData(0).set(samples);
   return buf;
+}
+
+/* 加载音效：先走 CDN，失败回退本地，再失败返回 null（由调用方回退合成） */
+async function loadSfx(rel){
+  if(!rel) return null;
+  for(const url of [cdn(rel), rel]){
+    try{
+      const r=await fetch(url);
+      if(!r.ok) continue;
+      return await actx.decodeAudioData(await r.arrayBuffer());
+    }catch(e){}
+  }
+  return null;
 }
 
 /* 占位 BGM：按曲风参数离线渲染一小段循环旋律 */
@@ -506,13 +489,19 @@ function pickNext(){
   return others[Math.floor(Math.random()*others.length)];
 }
 
+function trackSrc(t){
+  return (t.url && !t.cdnFailed) ? cdn(t.url) : t.audioUrl;
+}
+let currentUrl = null;
+
 async function playTrack(t){
   if(!t.audioUrl){
     if(t.url){ t.audioUrl = t.url; }
     else { t.blob = await renderTrack(t); t.audioUrl = URL.createObjectURL(t.blob); }
   }
   trackIndex = TRACKS.indexOf(t);
-  bgmAudio.src = t.audioUrl;
+  const src = trackSrc(t);
+  if(src !== currentUrl){ bgmAudio.src = src; currentUrl = src; }
   nowLink.textContent = t.name;
   nowLink.href = t.link;
   nowState.textContent = '▶ 播放中';
@@ -521,23 +510,44 @@ async function playTrack(t){
   try{ await bgmAudio.play(); }catch(e){}
 }
 
+/* 网页一加载就预加载随机一首 BGM，点开始时立刻能播 */
+function preloadTrack(t){
+  if(!t || !t.url) return t;
+  t.audioUrl = t.url;
+  trackIndex = TRACKS.indexOf(t);
+  const src = trackSrc(t);
+  bgmAudio.src = src;
+  currentUrl = src;
+  bgmAudio.load();
+  return t;
+}
+
+bgmAudio.addEventListener('error', ()=>{
+  const t = TRACKS[trackIndex];
+  if(t && t.url && !t.cdnFailed){
+    t.cdnFailed = true;
+    const src = trackSrc(t);
+    bgmAudio.src = src;
+    currentUrl = src;
+    bgmAudio.load();
+  }
+});
+
 bgmAudio.addEventListener('ended', ()=>{ if(started) playTrack(pickNext()); });
+
+const firstTrack = preloadTrack(pickNext());
 
 async function startExperience(){
   if(started) return;
   if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
   await actx.resume().catch(()=>{});
-  if(SFX_DOG_URL){
-    try{ const r=await fetch(SFX_DOG_URL); woofBuf=await actx.decodeAudioData(await r.arrayBuffer()); }catch(e){}
-  }
-  if(SFX_BARK_URL){
-    try{ const r=await fetch(SFX_BARK_URL); barkBuf=await actx.decodeAudioData(await r.arrayBuffer()); }catch(e){}
-  }
-  if(!woofBuf && !USE_TTS) woofBuf=bufferFromSamples(actx, renderWoof(actx.sampleRate));
-  if(!barkBuf && !USE_TTS) barkBuf=bufferFromSamples(actx, renderHowl(actx.sampleRate));
+  woofBuf = await loadSfx(SFX_DOG_URL);
+  if(!woofBuf) woofBuf = bufferFromSamples(actx, renderWoof(actx.sampleRate));
+  barkBuf = await loadSfx(SFX_BARK_URL);
+  if(!barkBuf) barkBuf = bufferFromSamples(actx, renderHowl(actx.sampleRate));
   started=true;
   overlay.classList.add('hidden');
-  playTrack(pickNext());
+  playTrack(firstTrack);
 }
 
 overlay.addEventListener('click', ()=>{ startExperience(); });
@@ -548,12 +558,13 @@ skipBtn.addEventListener('click', ()=>{ if(started && !holding && !barkPlaying) 
  * 图片状态机 + 摸头互动
  * ===================================================================== */
 function refreshDog(){
-  let src;
-  if(barkPlaying)                 src=IMG.bark;
-  else if(holding)                src=IMG.serious;
-  else if(dogImg.classList.contains('anim-h') || vWrap.classList.contains('anim-v')) src=IMG.pet;
-  else if(mouseInside)            src=IMG.serious;
-  else                            src=IMG.smile;
+  let key;
+  if(barkPlaying)                 key='bark';
+  else if(holding)                key='serious';
+  else if(dogImg.classList.contains('anim-h') || vWrap.classList.contains('anim-v')) key='pet';
+  else if(mouseInside)            key='serious';
+  else                            key='smile';
+  const src=imgSrc(key);
   const full=new URL(src, location.href).href;
   if(dogImg.src!==full) dogImg.src=src;
 }
@@ -574,6 +585,16 @@ function triggerWiggle(axis){
 dogImg.addEventListener('animationend', ()=>{ dogImg.classList.remove('anim-h'); refreshDog(); });
 vWrap.addEventListener('animationend', ()=>{ vWrap.classList.remove('anim-v'); refreshDog(); });
 dogImg.addEventListener('dragstart', e=>e.preventDefault());
+dogImg.addEventListener('error', ()=>{
+  const cur = new URL(dogImg.src, location.href).href;
+  for(const key in IMG){
+    if(cur === new URL(cdn(IMG[key]), location.href).href){
+      cdnBroken.add(IMG[key]);
+      refreshDog();
+      return;
+    }
+  }
+});
 
 function overDog(x,y){
   const r=dogImg.getBoundingClientRect();
@@ -625,7 +646,6 @@ async function startBark(){
   await ensureStarted();
   if(holding) return;
   if(barkSrc){ try{ barkSrc.onended=null; barkSrc.stop(); }catch(e){} barkSrc=null; }
-  if(USE_TTS) window.speechSynthesis.cancel();
   barkPlaying=false;
   stopShake(); stopZoom();
   dogImg.classList.remove('anim-h'); vWrap.classList.remove('anim-v');
@@ -641,8 +661,6 @@ async function startBark(){
     woofSrc.connect(woofGain); woofGain.connect(actx.destination);
     woofSrc.playbackRate.value=rate;
     woofSrc.start();
-  }else if(USE_TTS){  // 文字转语音念「大狗」
-    speakDogWord();
   }
 
   rateTimer=setInterval(()=>{
@@ -659,9 +677,6 @@ function endBark(){
   clearInterval(rateTimer);
   const holdMs=performance.now()-holdStart;
   const barkDur=Math.max(0.3, Math.min(20, holdMs/1000));
-
-  if(dogUtter){ dogUtter.onend=null; dogUtter=null; }
-  if(USE_TTS) window.speechSynthesis.cancel();
 
   if(woofSrc){  // Web Audio 版「大狗」低吼（真实素材/旧占位）
     const oldWoof=woofSrc, oldWoofGain=woofGain;
@@ -692,8 +707,6 @@ function endBark(){
     bg.gain.linearRampToValueAtTime(0.0001, endT);
     barkSrc.stop(endT+0.05);
     barkSrc.onended=()=>{ barkSrc=null; finishBark(); };
-  }else if(USE_TTS){  // 文字转语音念「叫」
-    speakBark(barkDur);
   }else{
     finishBark();
   }
