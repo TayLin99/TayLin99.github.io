@@ -175,7 +175,7 @@
   <div id="stage">
     <div id="hitZone">
       <div id="vWrap">
-        <img id="dog" src="大狗笑.png" alt="大狗" draggable="false">
+        <img id="dog" src="大狗笑.jpg" alt="大狗" draggable="false">
       </div>
     </div>
   </div>
@@ -216,7 +216,7 @@ const USE_TTS = typeof window!=='undefined' && 'speechSynthesis' in window && 'S
 
 /* ---------- 交互参数 ---------- */
 const START_RATE = 0.5;        // 长按起始音调：-1 八度（即 0.5x）
-const MAX_RATE   = 2.0;        // 长按最高音调
+const MAX_RATE   = 5;        // 长按最高音调
 const RATE_STEP  = 0.1;        // 每次升调幅度（速度 0.1x）
 const RATE_STEP_MS = 350;      // 升调间隔 ms
 const WIGGLE_THR = 70;         // 判定为“来回晃”所需的累计位移 px
@@ -236,7 +236,7 @@ const nowState = document.getElementById('nowState');
 const nowLink  = document.getElementById('nowLink');
 const skipBtn  = document.getElementById('skipBtn');
 
-const IMG = { serious:'大狗严肃.jpg', smile:'大狗笑.png', pet:'大狗摸头.jpg', bark:'大狗叫.jpg' };
+const IMG = { serious:'大狗严肃.jpg', smile:'大狗笑.jpg', pet:'大狗摸头.jpg', bark:'大狗叫.jpg' };
 /* 预加载 4 张图，避免切换时闪烁 */
 Object.values(IMG).forEach(src=>{ const im=new Image(); im.src=src; });
 
